@@ -6,11 +6,7 @@ date_default_timezone_set('Asia/Tashkent');
 // PHP 8.2 ga moslashtirilgan bot
 // =============================================
 
-$botttt = "bot_tokenini_yoz"; // BotFather dan tokenni shu yerga kiriting
-define('API_KEY', $botttt);
-
-$admin = "12345678"; // Admin Telegram ID
-$owners = [$admin];
+require_once __DIR__ . '/config.php'; // bot tokeni, admin ID va DB ulanish shu yerda
 // getme pastda chaqiriladi
 
 function bot($method, $datas = [])
@@ -36,8 +32,6 @@ function bot($method, $datas = [])
     }
     return json_decode($res);
 }
-
-require_once 'sql.php';
 
 include_once 'lang_user.php';
 include_once 'lang_data.php';

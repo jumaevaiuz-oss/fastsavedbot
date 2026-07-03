@@ -4,9 +4,9 @@
 // Bir marta ishga tushiring!
 // =============================================
 
-require_once __DIR__ . '/sql.php';
+require_once __DIR__ . '/config.php';
 
-$token = 'bot_tokenini_yoz'; // bot_8.2.php dagi tokenni bu yerga ham kiriting
+$token = API_KEY; // config.php dagi bot tokeni
 
 $webhookUrl = 'https://6831eecaafce3.xvest3.ru/fastsavedbot/bot.php' . $_SERVER['HTTP_HOST'] . str_replace('setup.php', 'bot.php', $_SERVER['SCRIPT_NAME']);
 

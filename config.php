@@ -1,8 +1,16 @@
 <?php
 // =============================================
-// FastSaved Bot - Database ulanish
+// FastSaved Bot - Konfiguratsiya (token, admin, DB)
 // =============================================
 
+// Bot sozlamalari
+$botttt = "bot_tokenini_yoz"; // BotFather dan tokenni shu yerga kiriting
+define('API_KEY', $botttt);
+
+$admin  = "12345678"; // Admin Telegram ID
+$owners = [$admin];
+
+// Database ulanish
 $servername = "localhost";
 $username   = "********";   // DB username kiriting
 $password   = "*********";   // DB parol kiriting
