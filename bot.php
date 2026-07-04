@@ -265,16 +265,17 @@ if (isset($tx) && $tx == "/start") {
             'text' => lang('choose_lang', $cid),
             'reply_markup' => json_encode($keyboard)
         ]);
-    } elseif (admin($cid) == 1) {
-        // Admin uchun /start bosilganda darhol admin panel ochiladi
-        sms($cid, "<b>Admin paneliga xush kelibsiz!</b>", $panel);
-        step($cid, "none");
     } else {
+        // Admin bo'lsa, salom matni bilan birga doimiy admin panel tugmalari ham chiqadi
         bot('sendMessage', [
             'chat_id' => $cid,
             'text' => lang('welcome', $cid),
-            'parse_mode' => 'Markdown'
+            'parse_mode' => 'Markdown',
+            'reply_markup' => admin($cid) == 1 ? $panel : null
         ]);
+        if (admin($cid) == 1) {
+            step($cid, "none");
+        }
     }
 }
 
@@ -421,7 +422,8 @@ if (strpos((string)$data, "lang_") === 0) {
         bot('sendMessage', [
             'chat_id' => $callfrid,
             'text' => lang('welcome', $callfrid),
-            'parse_mode' => 'Markdown'
+            'parse_mode' => 'Markdown',
+            'reply_markup' => admin($callfrid) == 1 ? $panel : null
         ]);
     }
     exit;
