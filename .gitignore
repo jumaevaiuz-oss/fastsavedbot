@@ -1,1 +1,8 @@
 config.php
+
+# Bot ishlayotganda o'zi yozadigan vaqtinchalik/foydalanuvchi ma'lumotlari.
+# Bular kod emas, runtime data — git tarixida saqlanmasligi kerak edi;
+# aynan shu fayllar serverda tez-tez o'zgarib turgani uchun har bir deploy
+# "git pull --rebase" bilan to'qnashib, deploy'ni butunlay to'xtatib qo'yardi.
+step/*
+!step/.gitkeep
