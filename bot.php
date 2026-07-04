@@ -9,6 +9,18 @@ date_default_timezone_set('Asia/Tashkent');
 require_once __DIR__ . '/config.php'; // bot tokeni, admin ID va DB ulanish shu yerda
 // getme pastda chaqiriladi
 
+// 🔒 Webhook himoyasi: agar config.php'da WEBHOOK_SECRET aniqlangan bo'lsa,
+// faqat shu maxfiy tokenni bilgan (ya'ni Telegram'ning o'zi) POST so'rovlariga javob beramiz.
+// ?update=send (cron) kabi GET so'rovlariga tegmaymiz.
+// WEBHOOK_SECRET hali qo'shilmagan bo'lsa, eskicha ishlashda davom etadi.
+if (defined('WEBHOOK_SECRET') && WEBHOOK_SECRET !== '' && ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
+    $received_secret = $_SERVER['HTTP_X_TELEGRAM_BOT_API_SECRET_TOKEN'] ?? '';
+    if (!hash_equals(WEBHOOK_SECRET, $received_secret)) {
+        http_response_code(403);
+        exit;
+    }
+}
+
 function bot($method, $datas = [])
 {
     $url = "https://api.telegram.org/bot" . API_KEY . "/" . $method;
@@ -216,6 +228,189 @@ function joinchat($id)
         return true;
 }
 
+function build_stat_text()
+{
+    global $connect;
+
+    // ⏱ Tizim va foydalanuvchi statistikasi
+    $loadtime = sys_getloadavg();
+    $stat = $connect->query("SELECT COUNT(*) AS cnt FROM `users`")->fetch_assoc()['cnt'];
+    $guruhlar = $connect->query("SELECT COUNT(*) AS cnt FROM `groups`")->fetch_assoc()['cnt'];
+    $passive = $connect->query("SELECT COUNT(*) AS cnt FROM users WHERE holat = '❌'")->fetch_assoc()['cnt'];
+    $joined_today = $connect->query("SELECT COUNT(*) AS cnt FROM `users` WHERE DATE(STR_TO_DATE(`vaqt`, '%d.%m.%Y %H:%i')) = CURDATE()")->fetch_assoc()['cnt'];
+    $joinedThisMonth = $connect->query("SELECT COUNT(*) AS cnt FROM `users` WHERE DATE_FORMAT(STR_TO_DATE(`vaqt`, '%d.%m.%Y %H:%i'), '%Y-%m') = DATE_FORMAT(CURDATE(), '%Y-%m')")->fetch_assoc()['cnt'];
+    $left_today = $connect->query("SELECT COUNT(*) AS cnt FROM `left_users` WHERE DATE(STR_TO_DATE(`date`, '%d.%m.%Y %H:%i')) = CURDATE()")->fetch_assoc()['cnt'];
+    $leftThisMonth = $connect->query("SELECT COUNT(*) AS cnt FROM `left_users` WHERE DATE_FORMAT(STR_TO_DATE(`date`, '%d.%m.%Y %H:%i'), '%Y-%m') = DATE_FORMAT(CURDATE(), '%Y-%m')")->fetch_assoc()['cnt'];
+
+    // 📹 Video yuklash statistikasi
+    $today = date('Y-m-d');
+    $month = date('Y-m');
+
+    $res_total = $connect->query("SELECT COUNT(*) as total FROM video_downloads");
+    $total = $res_total->fetch_assoc()['total'];
+
+    $stmt = $connect->prepare("SELECT COUNT(*) as total FROM video_downloads WHERE DATE(downloaded_at) = ?");
+    $stmt->bind_param("s", $today);
+    $stmt->execute();
+    $today_count = $stmt->get_result()->fetch_assoc()['total'];
+    $stmt->close();
+
+    $stmt = $connect->prepare("SELECT COUNT(*) as total FROM video_downloads WHERE DATE_FORMAT(downloaded_at, '%Y-%m') = ?");
+    $stmt->bind_param("s", $month);
+    $stmt->execute();
+    $month_count = $stmt->get_result()->fetch_assoc()['total'];
+    $stmt->close();
+
+    // Platform bo‘yicha
+    $instagram_count = $connect->query("SELECT COUNT(*) as total FROM video_downloads WHERE platform='instagram'")->fetch_assoc()['total'];
+    $tiktok_count = $connect->query("SELECT COUNT(*) as total FROM video_downloads WHERE platform='tiktok'")->fetch_assoc()['total'];
+    $youtube_count = $connect->query("SELECT COUNT(*) as total FROM video_downloads WHERE platform='youtube'")->fetch_assoc()['total']; // YouTube Shorts
+    $snapchat_count = $connect->query("SELECT COUNT(*) as total FROM video_downloads WHERE platform='snapchat'")->fetch_assoc()['total']; // Snapchat
+
+    // 📊 Yakuniy xabar
+    return "📊 <b>STATISTIKA</b> 📊\n\n" .
+    "💡 <b>O'rtacha yuklanish:</b> <code>$loadtime[0]</code>\n\n" .
+    "👤 <b>Foydalanuvchilar</b>\n" .
+    "• <b>Jami:</b> $stat ta\n" .
+    "• <b>Bugun qo'shilgan:</b> $joined_today ta\n" .
+    "• <b>Shu oy qo'shilgan:</b> $joinedThisMonth ta\n\n" .
+    "👥 <b>Guruhlar</b>\n" .
+    "• <b>Jami:</b> $guruhlar ta\n\n" .
+    "🚪 <b>Tark etganlar</b>\n" .
+    "• <b>Jami:</b> $passive ta\n" .
+    "• <b>Bugun:</b> $left_today ta\n" .
+    "• <b>Shu oy:</b> $leftThisMonth ta\n\n" .
+    "🎬 <b>Video Yuklashlar</b>\n" .
+    "• <b>Jami:</b> $total ta\n" .
+    "• <b>Bugun:</b> $today_count ta\n" .
+    "• <b>Shu oy:</b> $month_count ta\n" .
+    "• <b>Instagram:</b> $instagram_count ta\n" .
+    "• <b>TikTok:</b> $tiktok_count ta\n" .
+    "• <b>YouTube Shorts:</b> $youtube_count ta\n" .
+    "• <b>Snapchat:</b> $snapchat_count ta\n\n" .
+    "⏰ <b>Soat:</b> " . date('H:i:s') . " | 📆 <b>Sana:</b> " . date('d.m.Y');
+}
+
+// Navbatdagi (resume holatidagi) ommaviy xabar yuborish partiyasini bajaradi,
+// agar hozirgi vaqt shu ish uchun rejalashtirilgan vaqtga to'g'ri kelsa.
+// Tashqi cron bo'lmasa ham ishlashi uchun oddiy webhook so'rovlaridan ham chaqiriladi.
+function process_pending_send()
+{
+    global $connect;
+
+    $result = mysqli_query($connect, "SELECT * FROM `send`");
+    $row = mysqli_fetch_assoc($result);
+    if (!$row || $row['status'] != "resume") {
+        return;
+    }
+
+    $time = date('H:i');
+    $row1 = $row['time1'];
+    $row2 = $row['time2'];
+    if ($time != $row1 and $time != $row2) {
+        return;
+    }
+
+    $start_id = $row['start_id'];
+    $stop_id = $row['stop_id'];
+    $admin_id = $row['admin_id'];
+    $mied = $row['message_id'];
+    $edit_mess_id = $row['edit_mess_id'];
+    $sends_count = $row['sends_count'] ?? 0;
+    $receive_count = $row['receive_count'] ?? 0;
+    $statistics = $row['statistics'];
+    $time1 = date('H:i', strtotime('+1 minutes'));
+    $time2 = date('H:i', strtotime('+2 minutes'));
+    $limit = 400;
+
+    $sql = "SELECT * FROM `users` LIMIT $start_id,$limit";
+    $res = mysqli_query($connect, $sql);
+    while ($a = mysqli_fetch_assoc($res)) {
+        $id = $a['user_id'];
+        $receive_check = bot('copyMessage', [
+            'chat_id' => $id,
+            'from_chat_id' => $admin_id,
+            'message_id' => $mied
+        ]);
+        $sends_count++;
+        if ($receive_check->ok) {
+            $receive_count++;
+        }
+        if ($id == $stop_id) {
+            bot('sendMessage', [
+                'chat_id' => $admin_id,
+                'text' => "<b>✅ ️Xabar barcha bot foydalanuvchilariga yuborildi!</b>",
+                'parse_mode' => 'html'
+            ]);
+            // SEND jadvalini o‘chiramiz
+            mysqli_query($connect, "DELETE FROM `send`");
+            return;
+        }
+    }
+    mysqli_query($connect, "UPDATE `send` SET `time1` = '$time1'");
+    mysqli_query($connect, "UPDATE `send` SET `time2` = '$time2'");
+    $get_id = $start_id + $limit;
+    mysqli_query($connect, "UPDATE `send` SET `start_id` = '$get_id'");
+    mysqli_query($connect, "UPDATE `send` SET `sends_count` = '$sends_count'");
+    mysqli_query($connect, "UPDATE `send` SET `receive_count` = '$receive_count'");
+    $edit = bot('editMessageText', [
+        'chat_id' => $admin_id,
+        'message_id' => $edit_mess_id,
+        'text' => "<b>✅ Yuborildi:</b> <code>$sends_count/$statistics</code>
+<b>📥 Qabul qilindi:</b> <code>$receive_count</code>
+<b>🔰 Status</b>: <code>resume</code>",
+        'parse_mode' => 'html',
+        'reply_markup' => json_encode([
+            'inline_keyboard' => [
+                [['text' => "To'xtatish ⏸", 'callback_data' => "sendstatus=stopped"]],
+                [['text' => "🗑 O'chirish", 'callback_data' => "bekorqilish_send"]]
+            ]
+        ])
+    ]);
+    if ($edit->ok) {
+        $edit_mess_id = $edit->result->message_id;
+        mysqli_query($connect, "UPDATE `send` SET `edit_mess_id` = '$edit_mess_id'");
+    }
+}
+
+// Yuklab olish uchun soxta progress-bar xabarini yuboradi va bosqichma-bosqich
+// yangilab boradi. $wait (xabar ID) qaytaradi — chaqiruvchi keyin o'zi
+// API chaqiruvini bajaradi va progressni o'chirib/xatoni ko'rsatib beradi.
+function send_progress_message($cid, $mid, $uid, $emoji, $step_percent, $sleep_us, $chat_action_each_step = false)
+{
+    $progress = [];
+    for ($p = 0; $p <= 100; $p += $step_percent) {
+        $filled = (int) round($p / 10);
+        $bar = str_repeat('█', $filled) . str_repeat('░', 10 - $filled);
+        $progress[] = ($p >= 100)
+            ? "$emoji $bar 100% ✅\n\n" . lang('download_complete', $uid)
+            : "$emoji $bar $p%\n\n" . lang('downloading', $uid);
+    }
+
+    $wait = bot('sendMessage', [
+        'chat_id' => $cid,
+        'text' => $progress[0],
+        'reply_to_message_id' => $mid
+    ])->result->message_id;
+
+    for ($i = 1; $i < count($progress); $i++) {
+        if ($chat_action_each_step) {
+            bot('sendChatAction', [
+                'chat_id' => $cid,
+                'action' => 'upload_video'
+            ]);
+        }
+        usleep($sleep_us);
+        bot('editMessageText', [
+            'chat_id' => $cid,
+            'message_id' => $wait,
+            'text' => $progress[$i]
+        ]);
+    }
+
+    return $wait;
+}
+
 
 if (isset($chat_join_request)) {
     $connect->query("INSERT INTO requests (id, chat_id) VALUES ('$join_user_id', '$join_chat_id')");
@@ -291,6 +486,13 @@ if ($cid) {
 }
 
 if (!is_dir("step")) mkdir("step", 0755, true);
+
+// 📬 Tashqi cron sozlanmagan bo'lsa ham ommaviy xabar yuborish ishlashi uchun,
+// har bir oddiy webhook so'rovida ham navbatdagi partiyani tekshirib qo'yamiz.
+// (?update=send orqali kelgan so'rovlar buni pastda o'zi alohida chaqiradi — takrorlanmasin)
+if (!(isset($_GET['update']) && $_GET['update'] == "send")) {
+    process_pending_send();
+}
 
 
 
@@ -545,6 +747,7 @@ if (strpos((string)$data, "lang_") === 0) {
 
 
 if ($data == "language") {
+    bot('answerCallbackQuery', ['callback_query_id' => $qid]);
     $lang = get_user_lang($callfrid);
 
     $langs = [
@@ -602,6 +805,7 @@ if ($text == "◀️ Orqaga") {
 }
 
 if ($data == "checkSub") {
+    bot('answerCallbackQuery', ['callback_query_id' => $qid]);
     del();
     if (joinchat($cid2) == true) {
         sms($cid2, "<b> /start /start
@@ -613,7 +817,9 @@ if ($data == "checkSub") {
 if ($text == "🗄 Boshqarish" or $text == "/panel") {
     if (admin($cid) == 1) {
         sms($cid, "<b>Admin paneliga xush kelibsiz!</b>", $panel);
-        unlink("step/test1.txt");
+        if (file_exists("step/test1.txt")) {
+            unlink("step/test1.txt");
+        }
         step($cid, "none");
         exit();
     } else {
@@ -624,6 +830,7 @@ if ($text == "🗄 Boshqarish" or $text == "/panel") {
 }
 
 if ($data == "boshqarish") {
+    bot('answerCallbackQuery', ['callback_query_id' => $qid]);
     del();
     sms($cid2, "<b>Admin paneliga xush kelibsiz!</b>", $panel);
     step($cid2, "none");
@@ -682,7 +889,7 @@ if ($step == "send") {
     $time2 = date('H:i', strtotime('+2 minutes'));
     $tugma = json_encode($update->message->reply_markup);
     $reply_markup = base64_encode($tugma);
-    $stat = $connect->query("SELECT * FROM users")->num_rows;
+    $stat = $connect->query("SELECT COUNT(*) AS cnt FROM users")->fetch_assoc()['cnt'];
     $edit_mess_id = sms($cid, "<b>✅ Yuborildi:</b> <code>0/$stat</code>
 <b>📥 Qabul qilindi:</b> <code>0</code>
 <b>🔰 Status</b>: <code>resume</code>", json_encode([
@@ -704,6 +911,7 @@ if (mb_stripos((string)$data, "sendstatus=") !== false) {
     if ($row['status'] == $up_stat) {
         accl($qid, "Xabar yuborish xolati $up_stat ga o'zgartirolmaysiz.", 1);
     } else {
+        bot('answerCallbackQuery', ['callback_query_id' => $qid]);
         if ($up_stat == "resume") {
             $time1 = date("H:i", time() + 60);
             $time2 = date("H:i", time() + 120);
@@ -751,6 +959,7 @@ if ($text == "➕ Kanal qo'shish" and admin($cid) == 1) {
 }
 
 if ($data == "socialnetwork") {
+    bot('answerCallbackQuery', ['callback_query_id' => $qid]);
     del();
     sms($cid2, "<b>Havola uchun nom yuboring:</b>", $aort);
     step($cid2, "socialnetwork_step1");
@@ -758,7 +967,9 @@ if ($data == "socialnetwork") {
 
 if ($step == "socialnetwork_step1" and admin($cid) == 1) {
     if (isset($text)) {
-        file_put_contents("step/trash_social.txt", $text);
+        // Har bir admin uchun alohida fayl (bir nechta admin bir vaqtda
+        // ishlaganda bir-birini bosib yozib qo'ymasligi uchun)
+        file_put_contents("step/trash_social_$cid.txt", $text);
         sms($cid, "<b>✅ $text qabul qilindi!</b>
 
 <i>ixtiyorit havolani kiriting:</i>", null);
@@ -772,14 +983,16 @@ if ($step == "socialnetwork_step1" and admin($cid) == 1) {
 
 if ($step == "socialnetwork_step2" and admin($cid) == 1) {
     if (isset($text)) {
-        $nom = file_get_contents("step/trash_social.txt");
+        $nom = file_get_contents("step/trash_social_$cid.txt");
         if ($nom !== false) {
             $nom = base64_encode($nom);
             $sql = "INSERT INTO `kanallar` (`type`, `link`, `title`, `channelID`) VALUES ('social', '$text', '$nom', '')";
             if ($connect->query($sql)) {
+                unlink("step/trash_social_$cid.txt");
                 sms($cid, "<b>✅ Kanal muvoffaqiyatli qo‘shildi</b>", $panel);
                 step($cid, "none");
             } else {
+                unlink("step/trash_social_$cid.txt");
                 sms($cid, "<b>⚠️ Kanal qo‘shishda xatolik!</b>\n\n<code>{$connect->error}</code>", $panel);
                 step($cid, "none");
                 exit();
@@ -793,6 +1006,7 @@ if ($step == "socialnetwork_step2" and admin($cid) == 1) {
 }
 
 if (mb_stripos((string)$data, "request-") !== false) {
+    bot('answerCallbackQuery', ['callback_query_id' => $qid]);
     $type = explode("-", $data)[1];
     file_put_contents("step/$cid2.type", $type);
     sms($cid2, "<b>Endi kanalizdan \"forward\" xabar yuboring:</b>", $aort);
@@ -852,10 +1066,11 @@ if ($text == "🗑️ Kanal o'chirish" and admin($cid) == 1) {
 }
 
 if (stripos((string)$data, "delchan=") !== false) {
+    bot('answerCallbackQuery', ['callback_query_id' => $qid]);
     $ex = explode("=", $data)[1];
     $result = $connect->query("SELECT * FROM `kanallar` WHERE channelID = '$ex'");
     $row = $result->fetch_assoc();
-    if ($row['requestchannel'] == "true") {
+    if ($row['type'] == "request") {
         $connect->query("DELETE FROM requests WHERE chat_id = '$ex'");
     }
     $connect->query("DELETE FROM kanallar WHERE channelID = '$ex'");
@@ -877,65 +1092,7 @@ if (stripos((string)$data, "delchan=") !== false) {
 if ($text == "📊 Statistika" || $text == "/stat") {
     if (admin($cid) == 1) {
 
-        // ⏱ Tizim va foydalanuvchi statistikasi
-        $loadtime = sys_getloadavg();
-        $stat = mysqli_num_rows(mysqli_query($connect, "SELECT * FROM `users`"));
-        $guruhlar = mysqli_num_rows(mysqli_query($connect, "SELECT * FROM `groups`"));
-        $passive = $connect->query("SELECT * FROM users WHERE holat = '❌'")->num_rows;
-        $joined_today = $connect->query("SELECT * FROM `users` WHERE `vaqt` LIKE '%" . date('d.m.Y') . "%';")->num_rows;
-        $joinedThisMonth = $connect->query("SELECT * FROM `users` WHERE `vaqt` LIKE '%" . date('m.Y') . "%';")->num_rows;
-        $left_today = $connect->query("SELECT * FROM `left_users` WHERE `date` LIKE '%" . date('d.m.Y') . "%';")->num_rows;
-        $leftThisMonth = $connect->query("SELECT * FROM `left_users` WHERE `date` LIKE '%" . date('m.Y') . "%';")->num_rows;
-
-        // 📹 Video yuklash statistikasi
-        $today = date('Y-m-d');
-        $month = date('Y-m');
-
-        $res_total = $connect->query("SELECT COUNT(*) as total FROM video_downloads");
-        $total = $res_total->fetch_assoc()['total'];
-
-        $stmt = $connect->prepare("SELECT COUNT(*) as total FROM video_downloads WHERE DATE(downloaded_at) = ?");
-        $stmt->bind_param("s", $today);
-        $stmt->execute();
-        $res_today = $stmt->get_result();
-        $today_count = $res_today->fetch_assoc()['total'];
-        $stmt->close();
-
-        $stmt = $connect->prepare("SELECT COUNT(*) as total FROM video_downloads WHERE DATE_FORMAT(downloaded_at, '%Y-%m') = ?");
-        $stmt->bind_param("s", $month);
-        $stmt->execute();
-        $res_month = $stmt->get_result();
-        $month_count = $res_month->fetch_assoc()['total'];
-        $stmt->close();
-
-        // Platform bo‘yicha
-        $instagram_count = $connect->query("SELECT COUNT(*) as total FROM video_downloads WHERE platform='instagram'")->fetch_assoc()['total'];
-        $tiktok_count = $connect->query("SELECT COUNT(*) as total FROM video_downloads WHERE platform='tiktok'")->fetch_assoc()['total'];
-        $youtube_count = $connect->query("SELECT COUNT(*) as total FROM video_downloads WHERE platform='youtube'")->fetch_assoc()['total']; // YouTube Shorts
-        $snapchat_count = $connect->query("SELECT COUNT(*) as total FROM video_downloads WHERE platform='snapchat'")->fetch_assoc()['total']; // Snapchat
-
-        // 📊 Yakuniy xabar
-        $text_stat = "📊 <b>STATISTIKA</b> 📊\n\n" .
-        "💡 <b>O'rtacha yuklanish:</b> <code>$loadtime[0]</code>\n\n" .
-        "👤 <b>Foydalanuvchilar</b>\n" .
-        "• <b>Jami:</b> $stat ta\n" .
-        "• <b>Bugun qo'shilgan:</b> $joined_today ta\n" .
-        "• <b>Shu oy qo'shilgan:</b> $joinedThisMonth ta\n\n" .
-        "👥 <b>Guruhlar</b>\n" .
-        "• <b>Jami:</b> $guruhlar ta\n\n" .
-        "🚪 <b>Tark etganlar</b>\n" .
-        "• <b>Jami:</b> $passive ta\n" .
-        "• <b>Bugun:</b> $left_today ta\n" .
-        "• <b>Shu oy:</b> $leftThisMonth ta\n\n" .
-        "🎬 <b>Video Yuklashlar</b>\n" .
-        "• <b>Jami:</b> $total ta\n" .
-        "• <b>Bugun:</b> $today_count ta\n" .
-        "• <b>Shu oy:</b> $month_count ta\n" .
-        "• <b>Instagram:</b> $instagram_count ta\n" .
-        "• <b>TikTok:</b> $tiktok_count ta\n" .
-        "• <b>YouTube Shorts:</b> $youtube_count ta\n" .
-        "• <b>Snapchat:</b> $snapchat_count ta\n\n" .
-        "⏰ <b>Soat:</b> " . date('H:i:s') . " | 📆 <b>Sana:</b> " . date('d.m.Y');
+        $text_stat = build_stat_text();
 
         sms($cid, $text_stat, json_encode([
             'inline_keyboard' => [
@@ -949,65 +1106,9 @@ if ($text == "📊 Statistika" || $text == "/stat") {
 
 
 if ($data == "upstat") {
-    // ⏱ Tizim va foydalanuvchi statistikasi
-    $loadtime = sys_getloadavg();
-    $stat = mysqli_num_rows(mysqli_query($connect, "SELECT * FROM `users`"));
-    $guruhlar = mysqli_num_rows(mysqli_query($connect, "SELECT * FROM `groups`"));
-    $passive = $connect->query("SELECT * FROM users WHERE holat = '❌'")->num_rows;
-    $joined_today = $connect->query("SELECT * FROM `users` WHERE `vaqt` LIKE '%" . date('d.m.Y') . "%';")->num_rows;
-    $joinedThisMonth = $connect->query("SELECT * FROM `users` WHERE `vaqt` LIKE '%" . date('m.Y') . "%';")->num_rows;
-    $left_today = $connect->query("SELECT * FROM `left_users` WHERE `date` LIKE '%" . date('d.m.Y') . "%';")->num_rows;
-    $leftThisMonth = $connect->query("SELECT * FROM `left_users` WHERE `date` LIKE '%" . date('m.Y') . "%';")->num_rows;
+    bot('answerCallbackQuery', ['callback_query_id' => $qid]);
 
-    // 📹 Video yuklash statistikasi
-    $today = date('Y-m-d');
-    $month = date('Y-m');
-
-    $res_total = $connect->query("SELECT COUNT(*) as total FROM video_downloads");
-    $total = $res_total->fetch_assoc()['total'];
-
-    $stmt = $connect->prepare("SELECT COUNT(*) as total FROM video_downloads WHERE DATE(downloaded_at) = ?");
-    $stmt->bind_param("s", $today);
-    $stmt->execute();
-    $res_today = $stmt->get_result();
-    $today_count = $res_today->fetch_assoc()['total'];
-    $stmt->close();
-
-    $stmt = $connect->prepare("SELECT COUNT(*) as total FROM video_downloads WHERE DATE_FORMAT(downloaded_at, '%Y-%m') = ?");
-    $stmt->bind_param("s", $month);
-    $stmt->execute();
-    $res_month = $stmt->get_result();
-    $month_count = $res_month->fetch_assoc()['total'];
-    $stmt->close();
-
-    // Platform bo‘yicha
-    $instagram_count = $connect->query("SELECT COUNT(*) as total FROM video_downloads WHERE platform='instagram'")->fetch_assoc()['total'];
-    $tiktok_count = $connect->query("SELECT COUNT(*) as total FROM video_downloads WHERE platform='tiktok'")->fetch_assoc()['total'];
-    $youtube_count = $connect->query("SELECT COUNT(*) as total FROM video_downloads WHERE platform='youtube'")->fetch_assoc()['total']; // YouTube Shorts
-    $snapchat_count = $connect->query("SELECT COUNT(*) as total FROM video_downloads WHERE platform='snapchat'")->fetch_assoc()['total']; // Snapchat
-
-    // 📊 Yakuniy xabar
-    $text_stat = "📊 <b>STATISTIKA</b> 📊\n\n" .
-    "💡 <b>O'rtacha yuklanish:</b> <code>$loadtime[0]</code>\n\n" .
-    "👤 <b>Foydalanuvchilar</b>\n" .
-    "• <b>Jami:</b> $stat ta\n" .
-    "• <b>Bugun qo'shilgan:</b> $joined_today ta\n" .
-    "• <b>Shu oy qo'shilgan:</b> $joinedThisMonth ta\n\n" .
-    "👥 <b>Guruhlar</b>\n" .
-    "• <b>Jami:</b> $guruhlar ta\n\n" .
-    "🚪 <b>Tark etganlar</b>\n" .
-    "• <b>Jami:</b> $passive ta\n" .
-    "• <b>Bugun:</b> $left_today ta\n" .
-    "• <b>Shu oy:</b> $leftThisMonth ta\n\n" .
-    "🎬 <b>Video Yuklashlar</b>\n" .
-    "• <b>Jami:</b> $total ta\n" .
-    "• <b>Bugun:</b> $today_count ta\n" .
-    "• <b>Shu oy:</b> $month_count ta\n" .
-    "• <b>Instagram:</b> $instagram_count ta\n" .
-    "• <b>TikTok:</b> $tiktok_count ta\n" .
-    "• <b>YouTube Shorts:</b> $youtube_count ta\n" .
-    "• <b>Snapchat:</b> $snapchat_count ta\n\n" .
-    "⏰ <b>Soat:</b> " . date('H:i:s') . " | 📆 <b>Sana:</b> " . date('d.m.Y');
+    $text_stat = build_stat_text();
 
     bot('editMessageText', [
         'chat_id' => $callcid,
@@ -1034,6 +1135,7 @@ if ($text == "👨🏻‍⚖️ Adminlar") {
 
 if ($data == "admins") {
     if (admin($cid2) == 1) {
+        bot('answerCallbackQuery', ['callback_query_id' => $qid]);
         del();
         sms($cid2, "<b>👨🏻‍⚖️ Adminlar sozlamalari bo'limi!
 ⤵️ Kerakli menyuni tanlang:</b>", $admin_manager);
@@ -1072,15 +1174,27 @@ if ($text == "➕ Administrator qo'shish") {
     }
 }
 if ($step == "add-admin" and in_array($cid, $owners)) {
-    $result = mysqli_query($connect, "SELECT * FROM users WHERE user_id = '$text'");
-    $row = mysqli_fetch_assoc($result);
+    if (!ctype_digit((string)$text)) {
+        sms($cid, "<b>Faqat raqamli ID yuboring!</b>
+
+Boshqa ID raqamni kiriting:", null);
+        exit();
+    }
+    $stmt = $connect->prepare("SELECT * FROM users WHERE user_id = ?");
+    $stmt->bind_param("s", $text);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
     if (!$row) {
         sms($cid, "<b>Ushbu foydalanuvchi botdan foydalanmaydi!</b>
 
 Boshqa ID raqamni kiriting:", null);
         exit();
-    } elseif (!in_array($text, $admin)) {
-        $connect->query("INSERT INTO admins (user_id) VALUES ($text)");
+    } elseif (!admin($text)) {
+        $stmt = $connect->prepare("INSERT INTO admins (user_id) VALUES (?)");
+        $stmt->bind_param("s", $text);
+        $stmt->execute();
+        $stmt->close();
         sms($cid, "<code>$text</code> <b>adminlar ro'yxatiga qo'shildi!</b>", $admin_manager);
         step($cid, "none");
         exit();
@@ -1123,6 +1237,7 @@ if (mb_stripos((string)$data, "remove-admin=") !== false and in_array($cid2, $ow
     $result = mysqli_query($connect, "SELECT * FROM admins WHERE user_id = $user_od");
     $row = mysqli_fetch_assoc($result);
     if ($row) {
+        bot('answerCallbackQuery', ['callback_query_id' => $qid]);
         $connect->query("DELETE FROM admins WHERE user_id = $user_od");
         del();
         sms($cid2, "<code>$user_od</code> <b>adminlar ro'yxatidan olib tashlandi!</b>", $admin_manager);
@@ -1134,78 +1249,9 @@ if (mb_stripos((string)$data, "remove-admin=") !== false and in_array($cid2, $ow
 
 
 if (isset($_GET['update']) && $_GET['update'] == "send") {
-    $result = mysqli_query($connect, "SELECT * FROM `send`");
-    $row = mysqli_fetch_assoc($result);
-    $time = date('H:i');
-
-    if ($row['status'] == "resume") {
-        $row1 = $row['time1'];
-        $row2 = $row['time2'];
-        $start_id = $row['start_id'];
-        $stop_id = $row['stop_id'];
-        $admin_id = $row['admin_id'];
-        $mied = $row['message_id'];
-        $edit_mess_id = $row['edit_mess_id'];
-        $sends_count = $row['sends_count'] ?? 0;
-        $receive_count = $row['receive_count'] ?? 0;
-        $statistics = $row['statistics'];
-        $time1 = date('H:i', strtotime('+1 minutes'));
-        $time2 = date('H:i', strtotime('+2 minutes'));
-        $limit = 400;
-
-        if ($time == $row1 or $time == $row2) {
-            $sql = "SELECT * FROM `users` LIMIT $start_id,$limit";
-            $res = mysqli_query($connect, $sql);
-            while ($a = mysqli_fetch_assoc($res)) {
-                $id = $a['user_id'];
-                $receive_check = bot('copyMessage', [
-                    'chat_id' => $id,
-                    'from_chat_id' => $admin_id,
-                    'message_id' => $mied
-                ]);
-                $sends_count++;
-                if ($receive_check->ok) {
-                    $receive_count++;
-                }
-                if ($id == $stop_id) {
-                    bot('sendMessage', [
-                        'chat_id' => $admin_id,
-                        'text' => "<b>✅ ️Xabar barcha bot foydalanuvchilariga yuborildi!</b>",
-                        'parse_mode' => 'html'
-                    ]);
-                    // SEND jadvalini o‘chiramiz
-                    mysqli_query($connect, "DELETE FROM `send`");
-                    exit();
-                }
-            }
-            mysqli_query($connect, "UPDATE `send` SET `time1` = '$time1'");
-            mysqli_query($connect, "UPDATE `send` SET `time2` = '$time2'");
-            $get_id = $start_id + $limit;
-            mysqli_query($connect, "UPDATE `send` SET `start_id` = '$get_id'");
-            mysqli_query($connect, "UPDATE `send` SET `sends_count` = '$sends_count'");
-            mysqli_query($connect, "UPDATE `send` SET `receive_count` = '$receive_count'");
-            $edit = bot('editMessageText', [
-                'chat_id' => $admin_id,
-                'message_id' => $edit_mess_id,
-                'text' => "<b>✅ Yuborildi:</b> <code>$sends_count/$statistics</code>
-<b>📥 Qabul qilindi:</b> <code>$receive_count</code>
-<b>🔰 Status</b>: <code>resume</code>",
-                'parse_mode' => 'html',
-                'reply_markup' => json_encode([
-                    'inline_keyboard' => [
-                        [['text' => "To'xtatish ⏸", 'callback_data' => "sendstatus=stopped"]],
-                        [['text' => "🗑 O'chirish", 'callback_data' => "bekorqilish_send"]]
-                    ]
-                ])
-            ]);
-            if ($edit->ok) {
-                $edit_mess_id = $edit->result->message_id;
-                mysqli_query($connect, "UPDATE `send` SET `edit_mess_id` = '$edit_mess_id'");
-            }
-        }
-        echo json_encode(["status" => true, "cron" => "Sending message"]);
-        exit();
-    }
+    process_pending_send();
+    echo json_encode(["status" => true, "cron" => "Sending message"]);
+    exit();
 }
 
 
@@ -1213,6 +1259,9 @@ if (isset($_GET['update']) && $_GET['update'] == "send") {
 
 //𝗜𝗻𝘀𝘁𝗮𝗴𝗿𝗮𝗺
 if (mb_stripos((string)$tx, "instagram.com") !== false) {
+
+    $platform = "instagram";
+    $admin_id = 7827538214;
 
     // 🔁 Instagram → kksave.co
     $link = preg_replace(
@@ -1225,44 +1274,47 @@ if (mb_stripos((string)$tx, "instagram.com") !== false) {
     $link = preg_replace('/\?.*$/', '', $link);
 
     // 📊 Progress (lang orqali)
-    $progress = [
-        "📸 ░░░░░░░░░░ 0%\n\n"  . lang('downloading', $uid),
-        "📸 ██░░░░░░░░ 20%\n\n" . lang('downloading', $uid),
-        "📸 ████░░░░░░ 40%\n\n" . lang('downloading', $uid),
-        "📸 ██████░░░░ 60%\n\n" . lang('downloading', $uid),
-        "📸 ████████░░ 80%\n\n" . lang('downloading', $uid),
-        "📸 ██████████ 100% ✅\n\n" . lang('download_complete', $uid)
-    ];
+    $wait = send_progress_message($cid, $mid, $uid, "📸", 20, 250000, true);
 
-    // ⏳ Boshlang‘ich progress
-    $wait = bot('sendMessage', [
-        'chat_id' => $cid,
-        'text' => $progress[0],
-        'reply_to_message_id' => $mid
-    ])->result->message_id;
+    // ✅ Havola haqiqatan ham video ekanligini yuborishdan oldin tekshiramiz
+    // (kksave.co ba'zan video o'rniga oddiy sahifa/xato qaytarishi mumkin)
+    $ch = curl_init($link);
+    curl_setopt_array($ch, [
+        CURLOPT_NOBODY => true,
+        CURLOPT_HEADER => true,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_USERAGENT => 'Mozilla/5.0',
+        CURLOPT_TIMEOUT => 15,
+        CURLOPT_CONNECTTIMEOUT => 10,
+    ]);
+    curl_exec($ch);
+    $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $content_type = (string) curl_getinfo($ch, CURLINFO_CONTENT_TYPE);
+    curl_close($ch);
 
-    // 🔄 Progress + typing/upload effect
-    for ($i = 1; $i < count($progress); $i++) {
-
-        bot('sendChatAction', [
-            'chat_id' => $cid,
-            'action' => 'upload_video'
-        ]);
-
-        usleep(250000);
-
-        bot('editMessageText', [
-            'chat_id' => $cid,
-            'message_id' => $wait,
-            'text' => $progress[$i]
-        ]);
-    }
+    $is_video = $http_code == 200 && stripos($content_type, 'video') !== false;
 
     // 🗑 Progressni o‘chirish
     bot('deleteMessage', [
         'chat_id' => $cid,
         'message_id' => $wait
     ]);
+
+    // ❌ Video emas (havola ishlamayapti)
+    if (!$is_video) {
+        bot('sendMessage', [
+            'chat_id' => $cid,
+            'text' => lang('technical', $uid)
+        ]);
+
+        bot('sendMessage', [
+            'chat_id' => $admin_id,
+            'text' => "🚨 Instagram (kksave.co) ishlamayapti!\n🕓 " . date('Y-m-d H:i:s') . "\n📡 HTTP: $http_code | Content-Type: $content_type\nTekshiruv talab etiladi.",
+            'parse_mode' => 'html'
+        ]);
+        exit();
+    }
 
     // 📤 Video yuborish
     bot('sendChatAction', [
@@ -1275,6 +1327,12 @@ if (mb_stripos((string)$tx, "instagram.com") !== false) {
         'video' => $link,
         'reply_to_message_id' => $mid
     ]);
+
+    // 🧾 Yuklab olish tarixini saqlash
+    $stmt = $connect->prepare("INSERT INTO video_downloads (user_id, platform) VALUES (?, ?)");
+    $stmt->bind_param("is", $uid, $platform);
+    $stmt->execute();
+    $stmt->close();
 }
 
 
@@ -1289,42 +1347,15 @@ if (isset($tx) && (mb_stripos($tx, "tiktok.com") !== false || mb_stripos($tx, "v
     $tx_clean = !empty($matches[0]) ? $matches[0] : $tx;
 
     // 1️⃣ Vizual progress bar
-    $progress = [
-        "🎬 ░░░░░░░░░░ 0%\n\n"  . lang('downloading', $uid),
-        "🎬 █░░░░░░░░░ 10%\n\n" . lang('downloading', $uid),
-        "🎬 ██░░░░░░░░ 20%\n\n" . lang('downloading', $uid),
-        "🎬 ███░░░░░░░ 30%\n\n" . lang('downloading', $uid),
-        "🎬 ████░░░░░░ 40%\n\n" . lang('downloading', $uid),
-        "🎬 █████░░░░░ 50%\n\n" . lang('downloading', $uid),
-        "🎬 ██████░░░░ 60%\n\n" . lang('downloading', $uid),
-        "🎬 ███████░░░ 70%\n\n" . lang('downloading', $uid),
-        "🎬 ████████░░ 80%\n\n" . lang('downloading', $uid),
-        "🎬 █████████░ 90%\n\n" . lang('downloading', $uid),
-        "🎬 ██████████ 100% ✅\n\n" . lang('download_complete', $uid)
-    ];
-
-    // ⏳ Boshlang‘ich progress xabar
-    $wait = bot('sendMessage', [
-        'chat_id' => $cid,
-        'text' => $progress[0],
-        'reply_to_message_id' => $mid
-    ])->result->message_id;
-
-    // 📊 Progress yangilanishi
-    for ($i = 1; $i < count($progress); $i++) {
-        usleep(200000); // 0.2 soniya kutish
-        bot('editMessageText', [
-            'chat_id' => $cid,
-            'message_id' => $wait,
-            'text' => $progress[$i]
-        ]);
-    }
+    $wait = send_progress_message($cid, $mid, $uid, "🎬", 10, 200000, false);
 
     // 2️⃣ API orqali video olish
     $api = "https://6831eecaafce3.xvest3.ru/fastsavedbot/api/tiktokapi.php";
     $ch = curl_init($api . "?url=" . urlencode($tx_clean));
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0');
+    curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
     $res = curl_exec($ch);
     $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
@@ -1409,36 +1440,7 @@ preg_match('/https?:\/\/(www\.)?snapchat\.com\/spotlight\/[^\s?]+/i', $tx, $matc
 $tx_clean = $matches[0] ?? $tx;
 
 // 1️⃣ Vizual progress bar
-$progress = [
-    "👻 ░░░░░░░░░░ 0%\n\n"  . lang('downloading', $uid),
-    "👻 █░░░░░░░░░ 10%\n\n" . lang('downloading', $uid),
-    "👻 ██░░░░░░░░ 20%\n\n" . lang('downloading', $uid),
-    "👻 ███░░░░░░░ 30%\n\n" . lang('downloading', $uid),
-    "👻 ████░░░░░░ 40%\n\n" . lang('downloading', $uid),
-    "👻 █████░░░░░ 50%\n\n" . lang('downloading', $uid),
-    "👻 ██████░░░░ 60%\n\n" . lang('downloading', $uid),
-    "👻 ███████░░░ 70%\n\n" . lang('downloading', $uid),
-    "👻 ████████░░ 80%\n\n" . lang('downloading', $uid),
-    "👻 █████████░ 90%\n\n" . lang('downloading', $uid),
-    "👻 ██████████ 100% ✅\n\n" . lang('download_complete', $uid)
-];
-
-// ⏳ Boshlang‘ich progress xabar
-$wait = bot('sendMessage', [
-    'chat_id' => $cid,
-    'text' => $progress[0],
-    'reply_to_message_id' => $mid
-])->result->message_id;
-
-// 📊 Progress yangilanishi
-for ($i = 1; $i < count($progress); $i++) {
-    usleep(200000);
-    bot('editMessageText', [
-        'chat_id' => $cid,
-        'message_id' => $wait,
-        'text' => $progress[$i]
-    ]);
-}
+$wait = send_progress_message($cid, $mid, $uid, "👻", 10, 200000, false);
 
 // 2️⃣ API orqali video olish
 $api = "https://api.wwiw.uz/downloader?url=" . urlencode($tx_clean);
@@ -1531,36 +1533,7 @@ if (mb_stripos((string)$tx, "youtube.com/shorts") !== false || mb_stripos($tx, "
     $tx_clean = $matches[0] ?? $tx;
 
     // 1️⃣ Vizual progress bar
-    $progress = [
-        "▶️ ░░░░░░░░░░ 0%\n\n"  . lang('downloading', $uid),
-        "▶️ █░░░░░░░░░ 10%\n\n" . lang('downloading', $uid),
-        "▶️ ██░░░░░░░░ 20%\n\n" . lang('downloading', $uid),
-        "▶️ ███░░░░░░░ 30%\n\n" . lang('downloading', $uid),
-        "▶️ ████░░░░░░ 40%\n\n" . lang('downloading', $uid),
-        "▶️ █████░░░░░ 50%\n\n" . lang('downloading', $uid),
-        "▶️ ██████░░░░ 60%\n\n" . lang('downloading', $uid),
-        "▶️ ███████░░░ 70%\n\n" . lang('downloading', $uid),
-        "▶️ ████████░░ 80%\n\n" . lang('downloading', $uid),
-        "▶️ █████████░ 90%\n\n" . lang('downloading', $uid),
-        "▶️ ██████████ 100% ✅\n\n" . lang('download_complete', $uid)
-    ];
-
-    // ⏳ Boshlang‘ich progress xabar
-    $wait = bot('sendMessage', [
-        'chat_id' => $cid,
-        'text' => $progress[0],
-        'reply_to_message_id' => $mid
-    ])->result->message_id;
-
-    // 📊 Progress yangilanishi
-    for ($i = 1; $i < count($progress); $i++) {
-        usleep(200000);
-        bot('editMessageText', [
-            'chat_id' => $cid,
-            'message_id' => $wait,
-            'text' => $progress[$i]
-        ]);
-    }
+    $wait = send_progress_message($cid, $mid, $uid, "▶️", 10, 200000, false);
 
     // 2️⃣ yt-dlp shortsapi orqali video olish
     $api = "https://6831eecaafce3.xvest3.ru/fastsavedbot/api/shortsapi.php?url=" . urlencode($tx_clean);
@@ -1798,6 +1771,7 @@ if (mb_strpos((string)$callbackdata, "next_") === 0 || mb_strpos($callbackdata, 
         ['text' => lang('top_10', $callfrid), 'callback_data' => 'show_top']
     ];
 
+    bot('answerCallbackQuery', ['callback_query_id' => $qid]);
     bot('editMessageReplyMarkup', [
         'chat_id' => $callcid,
         'message_id' => $callmid,
@@ -1827,17 +1801,27 @@ if (mb_strpos((string)$callbackdata, "playmusic_") === 0) {
     if (!$data || !isset($data[$index])) exit();
 
     $track  = $data[$index];
-    $title  = $connect->real_escape_string($track['title']);
-    $artist = $connect->real_escape_string($track['artist']);
+    $title  = $track['title'];
+    $artist = $track['artist'];
     $music  = $track['music'];
 
     // 🔹 Top songs bazasini yangilash
-    $check = $connect->query("SELECT id FROM top_songs WHERE music_url='$music' LIMIT 1");
+    $stmt = $connect->prepare("SELECT id FROM top_songs WHERE music_url = ? LIMIT 1");
+    $stmt->bind_param("s", $music);
+    $stmt->execute();
+    $check = $stmt->get_result();
+    $stmt->close();
+
     if ($check->num_rows == 0) {
-        $connect->query("INSERT INTO top_songs (title, artist, music_url, downloads) 
-                         VALUES ('$title', '$artist', '$music', 1)");
+        $stmt = $connect->prepare("INSERT INTO top_songs (title, artist, music_url, downloads) VALUES (?, ?, ?, 1)");
+        $stmt->bind_param("sss", $title, $artist, $music);
+        $stmt->execute();
+        $stmt->close();
     } else {
-        $connect->query("UPDATE top_songs SET downloads = downloads + 1 WHERE music_url='$music'");
+        $stmt = $connect->prepare("UPDATE top_songs SET downloads = downloads + 1 WHERE music_url = ?");
+        $stmt->bind_param("s", $music);
+        $stmt->execute();
+        $stmt->close();
     }
 
     // 🎧 Musiqani yuborish
@@ -1875,6 +1859,7 @@ if (isset($callbackdata) && $callbackdata == "show_top") {
         $i++;
     }
 
+    bot('answerCallbackQuery', ['callback_query_id' => $qid]);
     bot('editMessageText', [
         'chat_id' => $callcid,
         'message_id' => $callmid,
