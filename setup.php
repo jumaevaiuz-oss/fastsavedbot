@@ -8,7 +8,7 @@ require_once __DIR__ . '/config.php';
 
 $token = API_KEY; // config.php dagi bot tokeni
 
-$webhookUrl = 'https://6831eecaafce3.xvest3.ru/fastsavedbot/bot.php' . $_SERVER['HTTP_HOST'] . str_replace('setup.php', 'bot.php', $_SERVER['SCRIPT_NAME']);
+$webhookUrl = 'https://' . $_SERVER['HTTP_HOST'] . str_replace('setup.php', 'bot.php', $_SERVER['SCRIPT_NAME']);
 
 $url = "https://api.telegram.org/bot{$token}/setWebhook";
 $ch = curl_init($url);
