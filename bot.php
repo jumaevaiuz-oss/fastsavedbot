@@ -265,6 +265,10 @@ if (isset($tx) && $tx == "/start") {
             'text' => lang('choose_lang', $cid),
             'reply_markup' => json_encode($keyboard)
         ]);
+    } elseif (admin($cid) == 1) {
+        // Admin uchun /start bosilganda darhol admin panel ochiladi
+        sms($cid, "<b>Admin paneliga xush kelibsiz!</b>", $panel);
+        step($cid, "none");
     } else {
         bot('sendMessage', [
             'chat_id' => $cid,
@@ -291,7 +295,7 @@ if (isset($tx) && $tx == "/settings" or $tx == "⚙️ Settings") {
 }
 
 
-if (isset($tx) && $tx == "/lang" or $tx == lang('change_lang', $cid)) {
+if (isset($tx) && $tx == "/language" or $tx == lang('change_lang', $cid)) {
     $lang = get_user_lang($cid);
 
     $keyboard = [
@@ -459,7 +463,7 @@ if ($data == "language") {
 }
 
 
-if ($tx == "/legal" or $data == "help") {
+if ($tx == "/botinfo" or $data == "help") {
     $chat_id = $cid ?? $cid2; // har ikkala holat uchun umumiy chat ID
 
     if (isset($qid)) {

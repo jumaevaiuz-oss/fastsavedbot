@@ -10,7 +10,7 @@ $lang_data = [
     'change_lang' => "🌍 Change language",
     'help_btn' => "🆘 Help",
     'help_text' => "🆘 Help: Send the video link. For help, contact @admin_username",
-    'help_full' => "Hello 🙂\n\n/lang change language 🌍\n/settings Bot settings ⚙️\n\n📞 Contact: @salihby",
+    'help_full' => "Hello 🙂\n\n/language change language 🌍\n/settings Bot settings ⚙️\n\n📞 Contact: @salihby",
 
     // 🔹 Video / Music keys
     'downloading' => "⏳ Downloading, please wait...",
@@ -36,7 +36,7 @@ $lang_data = [
     'change_lang' => "🌍 Изменить язык",
     'help_btn' => "🆘 Помощь",
     'help_text' => "🆘 Помощь: Отправьте ссылку на видео. Связь с админом: @admin_username",
-    'help_full' => "Здравствуйте 🙂\n\n/lang сменить язык 🌍\n/settings Настройки бота ⚙️\n\n📞 Контакт: @salihby",
+    'help_full' => "Здравствуйте 🙂\n\n/language сменить язык 🌍\n/settings Настройки бота ⚙️\n\n📞 Контакт: @salihby",
 
     // 🔹 Video / Music keys
     'downloading' => "⏳ Загрузка, пожалуйста, подождите...",
@@ -61,7 +61,7 @@ $lang_data = [
     'change_lang' => "🌍 Змінити мову",
     'help_btn' => "🆘 Допомога",
     'help_text' => "🆘 Допомога: Надішліть посилання на відео. Зв'язок: @admin_username",
-    'help_full' => "Привіт 🙂\n\n/lang змінити мову 🌍\n/settings Налаштування бота ⚙️\n\n📞 Контакт: @salihby",
+    'help_full' => "Привіт 🙂\n\n/language змінити мову 🌍\n/settings Налаштування бота ⚙️\n\n📞 Контакт: @salihby",
 
     // 🔹 Video / Music keys
     'downloading' => "⏳ Завантаження, будь ласка, зачекайте...",
@@ -86,7 +86,7 @@ $lang_data = [
     'change_lang' => "🌍 Cambiar idioma",
     'help_btn' => "🆘 Ayuda",
     'help_text' => "🆘 Ayuda: Envía el enlace del vídeo. Contacto: @admin_username",
-    'help_full' => "Hola 🙂\n\n/lang cambiar idioma 🌍\n/settings Configuración del bot ⚙️\n\n📞 Contacto: @salihby",
+    'help_full' => "Hola 🙂\n\n/language cambiar idioma 🌍\n/settings Configuración del bot ⚙️\n\n📞 Contacto: @salihby",
 
     // 🔹 Video / Music keys
     'downloading' => "⏳ Descargando, por favor espere...",
@@ -111,7 +111,7 @@ $lang_data = [
     'change_lang' => "🌍 Tilni o‘zgartirish",
     'help_btn' => "🆘 Yordam",
     'help_text' => "🆘 Yordam: Video havolasini yuboring. Admin: @admin_username",
-    'help_full' => "Assalomu alaykum 🙂\n\n/lang tilni almashtirish 🌍\n/settings Bot sozlamalari ⚙️\n\n📞 Contact: @salihby",
+    'help_full' => "Assalomu alaykum 🙂\n\n/language tilni almashtirish 🌍\n/settings Bot sozlamalari ⚙️\n\n📞 Contact: @salihby",
 
     // 🔹 Video / Music keys
     'downloading' => "⏳ Yuklanmoqda, kuting...",
@@ -136,7 +136,7 @@ $lang_data = [
     'change_lang' => "🌍 Alterar idioma",
     'help_btn' => "🆘 Ajuda",
     'help_text' => "🆘 Ajuda: Envie o link do vídeo. Contato: @admin_username",
-    'help_full' => "Olá 🙂\n\n/lang mudar idioma 🌍\n/settings Configurações do bot ⚙️\n\n📞 Contato: @salihby",
+    'help_full' => "Olá 🙂\n\n/language mudar idioma 🌍\n/settings Configurações do bot ⚙️\n\n📞 Contato: @salihby",
 
     // 🔹 Video / Music keys
     'downloading' => "⏳ Baixando, por favor, aguarde...",
@@ -161,7 +161,7 @@ $lang_data = [
     'change_lang' => "🌍 Sprache ändern",
     'help_btn' => "🆘 Hilfe",
     'help_text' => "🆘 Hilfe: Sende den Videolink. Kontakt: @admin_username",
-    'help_full' => "Hallo 🙂\n\n/lang Sprache ändern 🌍\n/settings Bot-Einstellungen ⚙️\n\n📞 Kontakt: @salihby",
+    'help_full' => "Hallo 🙂\n\n/language Sprache ändern 🌍\n/settings Bot-Einstellungen ⚙️\n\n📞 Kontakt: @salihby",
 
     // 🔹 Video / Music keys
     'downloading' => "⏳ Herunterladen, bitte warten...",
@@ -186,7 +186,7 @@ $lang_data = [
     'change_lang' => "🌍 Cambia lingua",
     'help_btn' => "🆘 Aiuto",
     'help_text' => "🆘 Aiuto: Invia il link del video. Contatta: @admin_username",
-    'help_full' => "Ciao 🙂\n\n/lang cambia lingua 🌍\n/settings Impostazioni bot ⚙️\n\n📞 Contatto: @salihby",
+    'help_full' => "Ciao 🙂\n\n/language cambia lingua 🌍\n/settings Impostazioni bot ⚙️\n\n📞 Contatto: @salihby",
 
     // 🔹 Video / Music keys
     'downloading' => "⏳ Download in corso, attendere prego...",
@@ -211,7 +211,7 @@ $lang_data = [
     'change_lang' => "🌍 Changer de langue",
     'help_btn' => "🆘 Aide",
     'help_text' => "🆘 Aide: Envoyez le lien de la vidéo. Contact: @admin_username",
-    'help_full' => "Bonjour 🙂\n\n/lang changer de langue 🌍\n/settings Paramètres du bot ⚙️\n\n📞 Contact: @salihby",
+    'help_full' => "Bonjour 🙂\n\n/language changer de langue 🌍\n/settings Paramètres du bot ⚙️\n\n📞 Contact: @salihby",
 
     // 🔹 Video / Music keys
     'downloading' => "⏳ Téléchargement en cours, veuillez patienter...",
@@ -236,7 +236,7 @@ $lang_data = [
     'change_lang' => "🌍 Dili değiştir",
     'help_btn' => "🆘 Yardım",
     'help_text' => "🆘 Yardım: Video bağlantısını gönderin. Destek: @admin_username",
-    'help_full' => "Merhaba 🙂\n\n/lang dili değiştir 🌍\n/settings Bot ayarları ⚙️\n\n📞 İletişim: @salihby",
+    'help_full' => "Merhaba 🙂\n\n/language dili değiştir 🌍\n/settings Bot ayarları ⚙️\n\n📞 İletişim: @salihby",
 
     // 🔹 Video / Music keys
     'downloading' => "⏳ Yükleniyor, lütfen bekleyin...",
@@ -261,7 +261,7 @@ $lang_data = [
     'change_lang' => "🌍 تغيير اللغة",
     'help_btn' => "🆘 المساعدة",
     'help_text' => "🆘 المساعدة: أرسل رابط الفيديو. تواصل: @admin_username",
-    'help_full' => "مرحبًا 🙂\n\n/lang تغيير اللغة 🌍\n/settings إعدادات البوت ⚙️\n\n📞 تواصل: @salihby",
+    'help_full' => "مرحبًا 🙂\n\n/language تغيير اللغة 🌍\n/settings إعدادات البوت ⚙️\n\n📞 تواصل: @salihby",
 
     // 🔹 Video / Music keys
     'downloading' => "⏳ جاري التحميل، يرجى الانتظار...",
@@ -286,7 +286,7 @@ $lang_data = [
     'change_lang' => "🌍 تغییر زبان",
     'help_btn' => "🆘 کمک",
     'help_text' => "🆘 کمک: لینک ویدیو را ارسال کنید. تماس: @admin_username",
-    'help_full' => "سلام 🙂\n\n/lang تغییر زبان 🌍\n/settings تنظیمات ربات ⚙️\n\n📞 تماس: @salihby",
+    'help_full' => "سلام 🙂\n\n/language تغییر زبان 🌍\n/settings تنظیمات ربات ⚙️\n\n📞 تماس: @salihby",
 
     // 🔹 Video / Music keys
     'downloading' => "⏳ در حال دانلود، لطفاً صبر کنید...",
@@ -311,7 +311,7 @@ $lang_data = [
     'change_lang' => "🌍 更改语言",
     'help_btn' => "🆘 帮助",
     'help_text' => "🆘 帮助：发送视频链接。联系 @admin_username",
-    'help_full' => "你好 🙂\n\n/lang 更改语言 🌍\n/settings 机器人设置 ⚙️\n\n📞 联系: @admin_username",
+    'help_full' => "你好 🙂\n\n/language 更改语言 🌍\n/settings 机器人设置 ⚙️\n\n📞 联系: @admin_username",
 
     // 🔹 Video / Music keys
     'downloading' => "⏳ 正在下载，请稍候...",
@@ -336,7 +336,7 @@ $lang_data = [
     'change_lang' => "🌍 Ubah bahasa",
     'help_btn' => "🆘 Bantuan",
     'help_text' => "🆘 Bantuan: Kirim tautan video. Kontak: @admin_username",
-    'help_full' => "Halo 🙂\n\n/lang ubah bahasa 🌍\n/settings Pengaturan bot ⚙️\n\n📞 Kontak: @admin_username",
+    'help_full' => "Halo 🙂\n\n/language ubah bahasa 🌍\n/settings Pengaturan bot ⚙️\n\n📞 Kontak: @admin_username",
 
     // 🔹 Video / Music keys
     'downloading' => "⏳ Mengunduh, harap tunggu...",
@@ -361,7 +361,7 @@ $lang_data = [
     'change_lang' => "🌍 Tukar bahasa",
     'help_btn' => "🆘 Bantuan",
     'help_text' => "🆘 Bantuan: Hantarkan pautan video. Hubungi: @admin_username",
-    'help_full' => "Hai 🙂\n\n/lang tukar bahasa 🌍\n/settings Tetapan bot ⚙️\n\n📞 Hubungi: @admin_username",
+    'help_full' => "Hai 🙂\n\n/language tukar bahasa 🌍\n/settings Tetapan bot ⚙️\n\n📞 Hubungi: @admin_username",
 
     // 🔹 Video / Music keys
     'downloading' => "⏳ Memuat turun, sila tunggu...",
@@ -386,7 +386,7 @@ $lang_data = [
     'change_lang' => "🌍 Taal wijzigen",
     'help_btn' => "🆘 Hulp",
     'help_text' => "🆘 Hulp: Stuur de videolink. Contact: @admin_username",
-    'help_full' => "Hallo 🙂\n\n/lang taal wijzigen 🌍\n/settings Botinstellingen ⚙️\n\n📞 Contact: @salihby",
+    'help_full' => "Hallo 🙂\n\n/language taal wijzigen 🌍\n/settings Botinstellingen ⚙️\n\n📞 Contact: @salihby",
 
     // 🔹 Video / Music keys
     'downloading' => "⏳ Bezig met downloaden, even geduld...",
@@ -411,7 +411,7 @@ $lang_data = [
     'change_lang' => "🌍 भाषा बदलें",
     'help_btn' => "🆘 सहायता",
     'help_text' => "🆘 सहायता: वीडियो लिंक भेजें। संपर्क: @admin_username",
-    'help_full' => "नमस्ते 🙂\n\n/lang भाषा बदलें 🌍\n/settings बॉट सेटिंग्स ⚙️\n\n📞 संपर्क करें: @admin_username",
+    'help_full' => "नमस्ते 🙂\n\n/language भाषा बदलें 🌍\n/settings बॉट सेटिंग्स ⚙️\n\n📞 संपर्क करें: @admin_username",
 
     // 🔹 Video / Music keys
     'downloading' => "⏳ डाउनलोड हो रहा है, कृपया प्रतीक्षा करें...",
@@ -436,7 +436,7 @@ $lang_data = [
     'change_lang' => "🌍 언어 변경",
     'help_btn' => "🆘 도움말",
     'help_text' => "🆘 도움말: 동영상 링크를 보내주세요. 연락처: @admin_username",
-    'help_full' => "안녕하세요 🙂\n\n/lang 언어 변경 🌍\n/settings 봇 설정 ⚙️\n\n📞 연락처: @admin_username",
+    'help_full' => "안녕하세요 🙂\n\n/language 언어 변경 🌍\n/settings 봇 설정 ⚙️\n\n📞 연락처: @admin_username",
 
     // 🔹 Video / Music keys
     'downloading' => "⏳ 다운로드 중입니다, 잠시 기다려주세요...",
@@ -461,7 +461,7 @@ $lang_data = [
     'change_lang' => "🌍 Тілді өзгерту",
     'help_btn' => "🆘 Көмек",
     'help_text' => "🆘 Көмек: Видеосілтемені жіберіңіз. Байланыс: @admin_username",
-    'help_full' => "Сәлем 🙂\n\n/lang тіл өзгерту 🌍\n/settings Бот баптаулары ⚙️\n\n📞 Байланыс: @admin_username",
+    'help_full' => "Сәлем 🙂\n\n/language тіл өзгерту 🌍\n/settings Бот баптаулары ⚙️\n\n📞 Байланыс: @admin_username",
 
     // 🔹 Video / Music keys
     'downloading' => "⏳ Жүктелуде, күте тұрыңыз...",
@@ -486,7 +486,7 @@ $lang_data = [
     'change_lang' => "🌍 Тилди өзгөртүү",
     'help_btn' => "🆘 Жардам",
     'help_text' => "🆘 Жардам: Видеонун шилтемесин жибериңиз. Байланыш: @admin_username",
-    'help_full' => "Салам 🙂\n\n/lang тил өзгөртүү 🌍\n/settings Бот орнотуулары ⚙️\n\n📞 Байланыш: @salihby",
+    'help_full' => "Салам 🙂\n\n/language тил өзгөртүү 🌍\n/settings Бот орнотуулары ⚙️\n\n📞 Байланыш: @salihby",
 
     // 🔹 Video / Music keys
     'downloading' => "⏳ Жүктөлүүдө, күтө туруңуз...",
@@ -511,7 +511,7 @@ $lang_data = [
     'change_lang' => "🌍 Dili üýtget",
     'help_btn' => "🆘 Kömek",
     'help_text' => "🆘 Kömek: Wideonyň linkini iberiň. Habarlaşmak: @admin_username",
-    'help_full' => "Salam 🙂\n\n/lang dili üýtget 🌍\n/settings Bot sazlamalary ⚙️\n\n📞 Habarlaşmak: @salihby",
+    'help_full' => "Salam 🙂\n\n/language dili üýtget 🌍\n/settings Bot sazlamalary ⚙️\n\n📞 Habarlaşmak: @salihby",
 
     // 🔹 Video / Music keys
     'downloading' => "⏳ Ýüklenýär, biraz garaşyň...",
@@ -536,7 +536,7 @@ $lang_data = [
     'change_lang' => "🌍 تغییر زبان",
     'help_btn' => "🆘 کمک",
     'help_text' => "🆘 کمک: لینک ویدیو را ارسال کنید. تماس: @admin_username",
-    'help_full' => "سلام 🙂\n\n/lang تغییر زبان 🌍\n/settings تنظیمات بات ⚙️\n\n📞 تماس: @salihby",
+    'help_full' => "سلام 🙂\n\n/language تغییر زبان 🌍\n/settings تنظیمات بات ⚙️\n\n📞 تماس: @salihby",
 
     // 🔹 Video / Music keys
     'downloading' => "⏳ در حال دانلود، لطفاً صبر کنید...",
