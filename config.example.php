@@ -16,12 +16,6 @@ define('API_KEY', $botttt);
 $admin  = "ADMIN_TELEGRAM_ID"; // Sizning Telegram ID raqamingiz (masalan: 123456789)
 $owners = [$admin];
 
-// 🔒 Webhook xavfsizligi (ixtiyoriy, lekin qat'iy tavsiya etiladi):
-// istalgan uzun-tasodifiy matn kiriting. setup.php shuni Telegram'ga yuboradi,
-// bot.php esa har bir kiruvchi so'rovda shu tokenni tekshiradi — begona odam
-// webhook manzilini bilsa ham, soxta update yubora olmaydi.
-define('WEBHOOK_SECRET', 'UZUN_TASODIFIY_MAXFIY_MATN_KIRITING');
-
 // Database ulanish
 $servername = "localhost";
 $username   = "DB_USERNAME_KIRITING";
