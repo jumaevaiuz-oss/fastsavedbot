@@ -22,11 +22,14 @@ $username   = "DB_USERNAME_KIRITING";
 $password   = "DB_PAROL_KIRITING";
 $dbname     = "DB_NOMI_KIRITING";
 
+mysqli_report(MYSQLI_REPORT_OFF); // ulanish xatosida exception emas, connect_error orqali tekshirish uchun
 $connect = new mysqli($servername, $username, $password, $dbname);
 
 if ($connect->connect_error) {
     // Xatoni log ga yozib, botni to'xtatmaslik
     error_log("DB xato: " . $connect->connect_error);
+    // 🔍 Vaqtinchalik (sozlash paytida): muammo topilgach shu qatorni olib tashlang
+    echo "DB ulanish xatosi: " . $connect->connect_error;
     http_response_code(200);
     exit;
 }
