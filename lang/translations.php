@@ -1,5 +1,5 @@
 <?php
-include_once 'lang_user.php';
+require_once __DIR__ . '/user_lang.php';
 
 $lang_data = [
 'en' => [
