@@ -16,12 +16,12 @@ $tx_clean = $matches[0] ?? $tx;
 // 1️⃣ Vizual progress bar
 $wait = send_progress_message($cid, $mid, $uid, "🎵", 10, 200000, false);
 
-// Audio konvertatsiyasi uzoq davom etishi mumkin — PHP skriptning o'zi
-// vaqtidan oldin o'ldirilib, hech qanday xabar yubormay "qotib
-// qolmasligi" uchun vaqt chegarasini kengaytiramiz.
-@set_time_limit(150);
+// Yuklab olish + konvertatsiya + Telegram'ga yuborish uzoq davom etishi
+// mumkin — PHP skriptning o'zi vaqtidan oldin o'ldirilib, hech qanday
+// xabar yubormay "qotib qolmasligi" uchun vaqt chegarasini kengaytiramiz.
+@set_time_limit(280);
 
-// 2️⃣ Cobalt API orqali audio (MP3) olish
+// 2️⃣ Cobalt API orqali audio (MP3) havolasini olish
 $audio_url = cobalt_youtube($tx_clean, [
     'downloadMode' => 'audio',
     'audioFormat' => 'mp3',
@@ -44,22 +44,72 @@ if (!$audio_url) {
     exit();
 }
 
+// 3️⃣ Telegram ba'zan Cobalt tunnel havolasini o'zi to'g'ridan-to'g'ri
+// ololmaydi ("Bad Request: failed to get HTTP URL content" — tunnel
+// vaqtinchalik/bir martalik bo'lgani yoki Telegram so'rovi bloklangani
+// sabab bo'lishi mumkin). Shu sabab faylni avval o'zimiz yuklab olib,
+// Telegram'ga havola sifatida emas, balki fayl sifatida (multipart) yuboramiz.
+$tmp_file = tempnam(sys_get_temp_dir(), 'ytaudio_');
+$fh = fopen($tmp_file, 'w');
+$ch = curl_init($audio_url);
+curl_setopt_array($ch, [
+    CURLOPT_FILE => $fh,
+    CURLOPT_TIMEOUT => 120,
+    CURLOPT_CONNECTTIMEOUT => 15,
+    CURLOPT_FOLLOWLOCATION => true,
+]);
+curl_exec($ch);
+$dl_http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+$dl_err = curl_error($ch);
+curl_close($ch);
+fclose($fh);
+
+$dl_size = file_exists($tmp_file) ? filesize($tmp_file) : 0;
+
+// ❌ Faylni tunnel havolasidan yuklab bo'lmadi
+if ($dl_http_code != 200 || $dl_size < 1000) {
+    @unlink($tmp_file);
+
+    bot('editMessageText', [
+        'chat_id' => $cid,
+        'message_id' => $wait,
+        'text' => lang('technical', $uid)
+    ]);
+
+    bot('sendMessage', [
+        'chat_id' => $admin_id,
+        'text' => "🚨 Cobalt tunnel havolasidan fayl yuklab bo'lmadi!\n🕓 " . date('Y-m-d H:i:s') . "\n📡 HTTP: $dl_http_code | Hajm: $dl_size bayt\n💬 cURL: " . ($dl_err ?: '-') . "\n🔗 URL: $audio_url",
+        'parse_mode' => 'html'
+    ]);
+    exit();
+}
+
 // ✅ Progressni o‘chirish
 bot('deleteMessage', [
     'chat_id' => $cid,
     'message_id' => $wait
 ]);
 
-// 🎧 Audio yuborish
-$send_result = bot('sendAudio', [
+// 🎧 Audio yuborish — fayl sifatida (multipart upload), havola sifatida emas
+$post_fields = [
     'chat_id' => $cid,
-    'audio' => $audio_url,
-    'reply_to_message_id' => $mid
+    'audio' => new CURLFile($tmp_file, 'audio/mpeg', 'audio.mp3'),
+    'reply_to_message_id' => $mid,
+];
+$ch = curl_init("https://api.telegram.org/bot" . API_KEY . "/sendAudio");
+curl_setopt_array($ch, [
+    CURLOPT_POST => true,
+    CURLOPT_POSTFIELDS => $post_fields,
+    CURLOPT_RETURNTRANSFER => true,
+    CURLOPT_TIMEOUT => 120,
 ]);
+$send_res = curl_exec($ch);
+curl_close($ch);
+@unlink($tmp_file);
 
-// ❌ Telegram audio havolasini qabul qilmadi (masalan noto'g'ri
-// Content-Type yoki tunnel havolasi yaroqsiz bo'lsa) — buni oldin
-// hech kim tekshirmagani uchun bot hech narsa demay jim qolar edi.
+$send_result = json_decode($send_res);
+
+// ❌ Telegram baribir rad etsa (masalan fayl buzuq), buni ko'rsatib beramiz
 if (empty($send_result->ok)) {
     $tg_error = $send_result->description ?? 'Noma\'lum xato';
 
@@ -70,7 +120,7 @@ if (empty($send_result->ok)) {
 
     bot('sendMessage', [
         'chat_id' => $admin_id,
-        'text' => "🚨 sendAudio xato berdi!\n🕓 " . date('Y-m-d H:i:s') . "\n💬 Telegram xatosi: $tg_error\n🔗 Audio URL: $audio_url",
+        'text' => "🚨 sendAudio (fayl) xato berdi!\n🕓 " . date('Y-m-d H:i:s') . "\n💬 Telegram xatosi: $tg_error",
         'parse_mode' => 'html'
     ]);
     exit();
