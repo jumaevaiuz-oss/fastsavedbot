@@ -366,32 +366,66 @@ function cobalt_download($video_url)
 }
 
 // YouTube audio yuklab olish/yuborish ishini alohida so'rovga (youtube_worker.php)
-// "fire-and-forget" tarzda topshiradi: juda qisqa timeout bilan o'zimizga
-// HTTP so'rov yuboramiz — so'rov serverga yetib borgach, biz javobni kutib
-// o'tirmasdan darhol davom etamiz, lekin server tomonda ignore_user_abort(true)
-// tufayli ishlov berish oxirigacha davom etadi. Shu orqali Telegram'ning
-// webhook so'roviga tezkor javob qaytariladi va u qayta-qayta urinib
-// ko'rmaydi (uzoq yuklab olish/konvertatsiya sababli).
+// "fire-and-forget" tarzda topshiradi. cURL o'rniga xom fsockopen ishlatiladi:
+// so'rovni yozib, JAVOBNI KUTMASDAN darhol soketni yopamiz — shu bilan
+// serverga to'liq so'rov yetib borgach (bu deyarli bir zumda sodir bo'ladi),
+// biz kutib o'tirmasdan davom etamiz, server esa ignore_user_abort(true)
+// tufayli ishlov berishni oxirigacha davom ettiradi. Bu curl'ning "javob
+// kelguncha kutish" xatti-harakatiga bog'liq bo'lmagani uchun cURL'dagi
+// timeout hiylasidan ancha ishonchli — Telegram'ning webhook so'roviga
+// tezkor javob qaytariladi va u qayta-qayta urinib ko'rmaydi.
+// youtube_worker.php'ni tashqi odamlar chaqirib botni suiiste'mol qilmasligi
+// uchun maxfiy token kerak. Buni WEBHOOK_SECRET'ga bog'lamaymiz, chunki u
+// config.php'da ixtiyoriy (sozlanmagan bo'lishi mumkin) — shu sabab faqat
+// serverning o'zi biladigan bot tokenidan (API_KEY) hosila qilib chiqaramiz,
+// alohida sozlash talab qilinmaydi.
+function youtube_worker_secret()
+{
+    return hash('sha256', API_KEY . '|youtube_worker_v1');
+}
+
 function trigger_youtube_worker($cid, $mid, $uid, $tx)
 {
-    $worker_url = 'https://' . $_SERVER['HTTP_HOST'] . str_replace('bot.php', 'youtube_worker.php', $_SERVER['SCRIPT_NAME']);
+    $host = $_SERVER['HTTP_HOST'];
+    $path = str_replace('bot.php', 'youtube_worker.php', $_SERVER['SCRIPT_NAME']);
 
-    $ch = curl_init($worker_url);
-    curl_setopt_array($ch, [
-        CURLOPT_POST => true,
-        CURLOPT_POSTFIELDS => [
-            'secret' => defined('WEBHOOK_SECRET') ? WEBHOOK_SECRET : '',
-            'cid' => $cid,
-            'mid' => $mid,
-            'uid' => $uid,
-            'tx' => $tx,
-        ],
-        CURLOPT_TIMEOUT_MS => 1500,
-        CURLOPT_CONNECTTIMEOUT_MS => 1500,
-        CURLOPT_RETURNTRANSFER => true,
+    $body = http_build_query([
+        'secret' => youtube_worker_secret(),
+        'cid' => $cid,
+        'mid' => $mid,
+        'uid' => $uid,
+        'tx' => $tx,
     ]);
-    curl_exec($ch);
-    curl_close($ch);
+
+    $fp = @fsockopen('ssl://' . $host, 443, $errno, $errstr, 5);
+    if (!$fp) {
+        // Zaxira yo'l: fsockopen ishlamasa (masalan hosting SSL soketlarni
+        // to'sib qo'ygan bo'lsa), qisqa timeout bilan cURL orqali urinib
+        // ko'ramiz — javobni butunlay kutmaymiz (aks holda bot.php uzoq
+        // "osilib" qolib, xuddi avvalgi muammoni qaytarib chiqaradi).
+        error_log("YouTube worker: fsockopen muvaffaqiyatsiz ($errno: $errstr) — cURL orqali qayta urinib ko'ramiz.");
+        $ch = curl_init('https://' . $host . $path);
+        curl_setopt_array($ch, [
+            CURLOPT_POST => true,
+            CURLOPT_POSTFIELDS => $body,
+            CURLOPT_TIMEOUT => 5,
+            CURLOPT_CONNECTTIMEOUT => 5,
+            CURLOPT_RETURNTRANSFER => true,
+        ]);
+        curl_exec($ch);
+        curl_close($ch);
+        return;
+    }
+
+    $request = "POST $path HTTP/1.1\r\n" .
+        "Host: $host\r\n" .
+        "Content-Type: application/x-www-form-urlencoded\r\n" .
+        "Content-Length: " . strlen($body) . "\r\n" .
+        "Connection: Close\r\n\r\n" .
+        $body;
+
+    fwrite($fp, $request);
+    fclose($fp);
 }
 
 // Cobalt API orqali YouTube uchun sifat/format tanlab yuklab olish

@@ -9,19 +9,19 @@ ignore_user_abort(true);
 
 require_once __DIR__ . '/config.php';
 
-// 🔒 Faqat bot.php'ning o'zi (WEBHOOK_SECRET'ni bilgan holda) shu faylni
-// chaqira oladi — begona odam to'g'ridan-to'g'ri so'rov yuborib, botni
-// suiiste'mol qilib (ixtiyoriy chat'ga yuklab olingan fayl yuborishga
-// majburlab) bo'lmasin.
-$secret = $_POST['secret'] ?? '';
-if (!defined('WEBHOOK_SECRET') || WEBHOOK_SECRET === '' || !hash_equals(WEBHOOK_SECRET, $secret)) {
-    http_response_code(403);
-    exit;
-}
-
 require_once __DIR__ . '/src/functions.php';
 require_once __DIR__ . '/lang/user_lang.php';
 require_once __DIR__ . '/lang/translations.php';
+
+// 🔒 Faqat bot.php'ning o'zi (bot tokenidan hosila qilingan maxfiy tokenni
+// bilgan holda) shu faylni chaqira oladi — begona odam to'g'ridan-to'g'ri
+// so'rov yuborib, botni suiiste'mol qilib (ixtiyoriy chat'ga yuklab olingan
+// fayl yuborishga majburlab) bo'lmasin.
+$secret = $_POST['secret'] ?? '';
+if (!hash_equals(youtube_worker_secret(), $secret)) {
+    http_response_code(403);
+    exit;
+}
 
 $cid = $_POST['cid'] ?? null;
 $mid = $_POST['mid'] ?? null;
