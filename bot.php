@@ -966,8 +966,15 @@ if (mb_stripos((string)$tx, "youtube.com/shorts") !== false) {
     require __DIR__ . '/handlers/youtube_shorts.php';
 }
 // 𝗬𝗼𝘂𝗧𝘂𝗯𝗲 (oddiy video/musiqa havolasi — faqat audio/MP3 yuklab beriladi)
+// ⚡ Bu jarayon (yuklab olish + MP3'ga o'girish + Telegram'ga yuklash) juda
+// uzoq davom etishi mumkin. Agar shu yerda to'g'ridan-to'g'ri kutib tursak,
+// Telegram'ning webhook so'rovi vaqtida javob bermay qoladi va u xuddi shu
+// xabarni qayta-qayta qayta yuboradi (natijada bitta qo'shiq bir necha
+// marta yuklanadi). Shu sabab og'ir ishni alohida so'rovga (youtube_worker.php)
+// "fire-and-forget" tarzda topshiramiz — shu yerda darhol davom etamiz,
+// Telegram'ga tezkor javob qaytadi.
 elseif (mb_stripos((string)$tx, "youtube.com") !== false || mb_stripos((string)$tx, "youtu.be") !== false) {
-    require __DIR__ . '/handlers/youtube.php';
+    trigger_youtube_worker($cid, $mid, $uid, $tx);
 }
 
 

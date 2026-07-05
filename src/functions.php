@@ -365,6 +365,35 @@ function cobalt_download($video_url)
     return null;
 }
 
+// YouTube audio yuklab olish/yuborish ishini alohida so'rovga (youtube_worker.php)
+// "fire-and-forget" tarzda topshiradi: juda qisqa timeout bilan o'zimizga
+// HTTP so'rov yuboramiz — so'rov serverga yetib borgach, biz javobni kutib
+// o'tirmasdan darhol davom etamiz, lekin server tomonda ignore_user_abort(true)
+// tufayli ishlov berish oxirigacha davom etadi. Shu orqali Telegram'ning
+// webhook so'roviga tezkor javob qaytariladi va u qayta-qayta urinib
+// ko'rmaydi (uzoq yuklab olish/konvertatsiya sababli).
+function trigger_youtube_worker($cid, $mid, $uid, $tx)
+{
+    $worker_url = 'https://' . $_SERVER['HTTP_HOST'] . str_replace('bot.php', 'youtube_worker.php', $_SERVER['SCRIPT_NAME']);
+
+    $ch = curl_init($worker_url);
+    curl_setopt_array($ch, [
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => [
+            'secret' => defined('WEBHOOK_SECRET') ? WEBHOOK_SECRET : '',
+            'cid' => $cid,
+            'mid' => $mid,
+            'uid' => $uid,
+            'tx' => $tx,
+        ],
+        CURLOPT_TIMEOUT_MS => 1500,
+        CURLOPT_CONNECTTIMEOUT_MS => 1500,
+        CURLOPT_RETURNTRANSFER => true,
+    ]);
+    curl_exec($ch);
+    curl_close($ch);
+}
+
 // Cobalt API orqali YouTube uchun sifat/format tanlab yuklab olish
 // (videoQuality, downloadMode, audioFormat, audioBitrate kabi qo'shimcha
 // parametrlarni qo'llab-quvvatlaydi). Faqat YouTube sifat-tanlash oqimida

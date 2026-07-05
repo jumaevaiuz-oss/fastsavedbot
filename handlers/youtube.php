@@ -7,28 +7,6 @@
 $platform = "youtube";
 $admin_id = 7827538214;
 
-// ⚡ Bu bo'lim (yuklab olish + Telegram'ga yuklash) uzoq davom etishi mumkin.
-// Agar Telegram'ning webhook so'roviga tezkor javob bermasak, u bizni
-// "javob bermadi" deb hisoblab, XUDDI SHU xabarni qayta-qayta qayta
-// yuboradi — natijada bitta qo'shiq bir necha marta yuklanib ketadi.
-// Shu sabab webhook ulanishini darhol yakunlab, qolgan ishni orqa fonda
-// davom ettiramiz (Telegram'ga sendMessage kabi chaqiruvlar buning uchun
-// alohida, tashqi so'rovlar bo'lgani sabab bunga xalaqit bermaydi).
-if (function_exists('fastcgi_finish_request')) {
-    fastcgi_finish_request();
-} else {
-    ignore_user_abort(true);
-    if (ob_get_level() > 0) {
-        ob_end_clean();
-    }
-    header('Connection: close');
-    ob_start();
-    echo '';
-    header('Content-Length: ' . ob_get_length());
-    ob_end_flush();
-    flush();
-}
-
 // 🔹 Havolani tozalash — xabarda boshqa matn/havolalar ham bo'lishi mumkin
 // (masalan forward qilingan e'lonlar), shu sabab faqat YouTube havolasining
 // o'zini ajratib olamiz, aks holda Cobalt API butun matnni tushunolmaydi.
