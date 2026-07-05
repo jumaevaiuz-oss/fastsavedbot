@@ -330,3 +330,37 @@ function send_progress_message($cid, $mid, $uid, $emoji, $step_percent, $sleep_u
 
     return $wait;
 }
+
+// Cobalt API (https://cobalt-production-a2db.up.railway.app) orqali
+// YouTube/Instagram/TikTok/Snapchat havolasini to'g'ridan-to'g'ri yuklab
+// olish manziliga aylantiradi. Xato bo'lsa null qaytaradi va tashxis uchun
+// xom javobni error_log'ga yozadi.
+function cobalt_download($video_url)
+{
+    $ch = curl_init('https://cobalt-production-a2db.up.railway.app');
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_POST => true,
+        CURLOPT_HTTPHEADER => ['Content-Type: application/json', 'Accept: application/json'],
+        CURLOPT_POSTFIELDS => json_encode(['url' => $video_url]),
+        CURLOPT_TIMEOUT => 30,
+        CURLOPT_CONNECTTIMEOUT => 10,
+    ]);
+    $res = curl_exec($ch);
+    $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($res === false || empty($res)) {
+        error_log("Cobalt API: javob olinmadi (curl xatosi).");
+        return null;
+    }
+
+    $data = json_decode($res, true);
+
+    if (!empty($data['url'])) {
+        return $data['url'];
+    }
+
+    error_log("Cobalt API: video havolasi topilmadi. HTTP: $http_code Javob: $res");
+    return null;
+}
