@@ -51,11 +51,30 @@ bot('deleteMessage', [
 ]);
 
 // 🎧 Audio yuborish
-bot('sendAudio', [
+$send_result = bot('sendAudio', [
     'chat_id' => $cid,
     'audio' => $audio_url,
     'reply_to_message_id' => $mid
 ]);
+
+// ❌ Telegram audio havolasini qabul qilmadi (masalan noto'g'ri
+// Content-Type yoki tunnel havolasi yaroqsiz bo'lsa) — buni oldin
+// hech kim tekshirmagani uchun bot hech narsa demay jim qolar edi.
+if (empty($send_result->ok)) {
+    $tg_error = $send_result->description ?? 'Noma\'lum xato';
+
+    bot('sendMessage', [
+        'chat_id' => $cid,
+        'text' => lang('technical', $uid)
+    ]);
+
+    bot('sendMessage', [
+        'chat_id' => $admin_id,
+        'text' => "🚨 sendAudio xato berdi!\n🕓 " . date('Y-m-d H:i:s') . "\n💬 Telegram xatosi: $tg_error\n🔗 Audio URL: $audio_url",
+        'parse_mode' => 'html'
+    ]);
+    exit();
+}
 
 // 🧾 Yuklab olish tarixini saqlash
 $stmt = $connect->prepare("INSERT INTO video_downloads (user_id, platform) VALUES (?, ?)");
