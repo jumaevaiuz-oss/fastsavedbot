@@ -1,58 +1,36 @@
 <?php
-// YouTube Shorts video yuklab olish (Cobalt API orqali).
-// bot.php'dan include qilinadi, shuning uchun $tx, $cid, $mid, $uid, $connect
-// kabi o'zgaruvchilar bu yerda ham bevosita mavjud.
+// YouTube link kelganda: foydalanuvchiga video sifati / audio formatini
+// tanlash uchun tugmalar ko'rsatadi. Haqiqiy yuklab olish bot.php'dagi
+// yt_v_/yt_a_ callback handlerlarida, cobalt_youtube() orqali bajariladi.
+// bot.php'dan include qilinadi, shuning uchun $tx, $cid, $mid kabi
+// o'zgaruvchilar bu yerda ham bevosita mavjud.
 
-$platform = "youtube";
-$admin_id = 7827538214;
+// Havolani keyingi qadamda (callback bosilganda) ishlatish uchun
+// vaqtincha saqlab qo'yamiz — callback_data uzunligi Telegram'da 64 bayt
+// bilan cheklangani uchun URL'ni to'g'ridan-to'g'ri callback_data'ga
+// qo'ymaymiz.
+file_put_contents("step/yt_$cid.txt", $tx);
 
-// 🔹 Havolani tozalash
-preg_match('/https?:\/\/(www\.)?(youtube\.com\/shorts\/[^\s?]+|youtu\.be\/[^\s?]+)/i', $tx, $matches);
-$tx_clean = $matches[0] ?? $tx;
+$keyboard = [
+    'inline_keyboard' => [
+        [
+            ['text' => '🎬 1080p', 'callback_data' => 'yt_v_1080'],
+            ['text' => '📺 720p', 'callback_data' => 'yt_v_720']
+        ],
+        [
+            ['text' => '📱 480p', 'callback_data' => 'yt_v_480'],
+            ['text' => '🔹 360p', 'callback_data' => 'yt_v_360']
+        ],
+        [
+            ['text' => '🎵 MP3 320kbps', 'callback_data' => 'yt_a_320'],
+            ['text' => '🎵 MP3 128kbps', 'callback_data' => 'yt_a_128']
+        ]
+    ]
+];
 
-// 1️⃣ Vizual progress bar
-$wait = send_progress_message($cid, $mid, $uid, "▶️", 10, 200000, false);
-
-// 2️⃣ Cobalt API orqali video olish
-$video_url = cobalt_download($tx_clean);
-
-// ❌ Video topilmasa / API ishlamasa
-if (!$video_url) {
-    bot('editMessageText', [
-        'chat_id' => $cid,
-        'message_id' => $wait,
-        'text' => lang('not_found', $uid)
-    ]);
-
-    bot('sendMessage', [
-        'chat_id' => $admin_id,
-        'text' => "🚨 Cobalt API ishlamayapti!\n🕓 " . date('Y-m-d H:i:s') . "\n🔗 Platforma: YouTube\nTekshiruv talab etiladi.",
-        'parse_mode' => 'html'
-    ]);
-    exit();
-}
-
-// ✅ Progressni o‘chirish
-bot('deleteMessage', [
+bot('sendMessage', [
     'chat_id' => $cid,
-    'message_id' => $wait
-]);
-
-// 💬 Video yuborish effekti
-bot('sendChatAction', [
-    'chat_id' => $cid,
-    'action' => 'upload_video'
-]);
-
-// ✅ Video yuborish (captionsiz)
-bot('sendVideo', [
-    'chat_id' => $cid,
-    'video' => $video_url,
+    'text' => "🎬 YouTube\nNimani yuklamoqchisiz?",
+    'reply_markup' => json_encode($keyboard),
     'reply_to_message_id' => $mid
 ]);
-
-// 🧾 Yuklab olish tarixini saqlash
-$stmt = $connect->prepare("INSERT INTO video_downloads (user_id, platform) VALUES (?, ?)");
-$stmt->bind_param("is", $uid, $platform);
-$stmt->execute();
-$stmt->close();

@@ -364,3 +364,46 @@ function cobalt_download($video_url)
     error_log("Cobalt API: video havolasi topilmadi. HTTP: $http_code Javob: $res");
     return null;
 }
+
+// Cobalt API orqali YouTube uchun sifat/format tanlab yuklab olish
+// (videoQuality, downloadMode, audioFormat, audioBitrate kabi qo'shimcha
+// parametrlarni qo'llab-quvvatlaydi). Faqat YouTube sifat-tanlash oqimida
+// ishlatiladi — boshqa platformalar cobalt_download() dan foydalanadi.
+function cobalt_youtube($url, $options = [])
+{
+    $body = array_merge(["url" => $url], $options);
+
+    $ch = curl_init('https://cobalt-production-a2db.up.railway.app');
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_POST => true,
+        CURLOPT_HTTPHEADER => ['Content-Type: application/json', 'Accept: application/json'],
+        CURLOPT_POSTFIELDS => json_encode($body),
+        CURLOPT_TIMEOUT => 30,
+        CURLOPT_CONNECTTIMEOUT => 10,
+    ]);
+    $res = curl_exec($ch);
+    curl_close($ch);
+
+    if (!$res) {
+        error_log("Cobalt YouTube API: javob olinmadi (curl xatosi).");
+        return null;
+    }
+
+    $result = json_decode($res, true);
+    if (!$result || empty($result['status'])) {
+        error_log("Cobalt YouTube API: noto'g'ri javob: " . $res);
+        return null;
+    }
+
+    switch ($result['status']) {
+        case 'tunnel':
+        case 'redirect':
+            return $result['url'] ?? null;
+        case 'picker':
+            return $result['picker'][0]['url'] ?? null;
+        default:
+            error_log("Cobalt YouTube API xatosi: " . $res);
+            return null;
+    }
+}
