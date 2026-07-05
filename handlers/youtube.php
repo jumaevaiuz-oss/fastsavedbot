@@ -7,6 +7,12 @@
 $platform = "youtube";
 $admin_id = 7827538214;
 
+// 🔹 Havolani tozalash — xabarda boshqa matn/havolalar ham bo'lishi mumkin
+// (masalan forward qilingan e'lonlar), shu sabab faqat YouTube havolasining
+// o'zini ajratib olamiz, aks holda Cobalt API butun matnni tushunolmaydi.
+preg_match('/https?:\/\/(www\.|m\.)?(youtube\.com\/watch\?[^\s]+|youtube\.com\/live\/[^\s]+|youtu\.be\/[^\s]+)/i', $tx, $matches);
+$tx_clean = $matches[0] ?? $tx;
+
 // 1️⃣ Vizual progress bar
 $wait = send_progress_message($cid, $mid, $uid, "🎵", 10, 200000, false);
 
@@ -16,7 +22,7 @@ $wait = send_progress_message($cid, $mid, $uid, "🎵", 10, 200000, false);
 @set_time_limit(150);
 
 // 2️⃣ Cobalt API orqali audio (MP3) olish
-$audio_url = cobalt_youtube($tx, [
+$audio_url = cobalt_youtube($tx_clean, [
     'downloadMode' => 'audio',
     'audioFormat' => 'mp3',
     'audioBitrate' => '320'
