@@ -13,8 +13,8 @@ $tx_clean = $matches[0] ?? $tx;
 // 1️⃣ Vizual progress bar
 $wait = send_progress_message($cid, $mid, $uid, "▶️", 10, 200000, false);
 
-// 2️⃣ yt-dlp shortsapi orqali video olish
-$api = "https://6831eecaafce3.xvest3.ru/fastsavedbot/api/shortsapi.php?url=" . urlencode($tx_clean);
+// 2️⃣ universalDownloader orqali video olish
+$api = "http://127.0.0.1:3001/api/youtube/download?url=" . urlencode($tx_clean);
 $ch = curl_init($api);
 curl_setopt_array($ch, [
     CURLOPT_RETURNTRANSFER => true,
@@ -32,11 +32,17 @@ if ($res === false || empty($res) || $http_code != 200) {
         'message_id' => $wait,
         'text' => lang('technical', $uid)
     ]);
+
+    bot('sendMessage', [
+        'chat_id' => $admin_id,
+        'text' => "🚨 API ishlamayapti!\n🕓 " . date('Y-m-d H:i:s') . "\n🔗 Platforma: YouTube\nTekshiruv talab etiladi.",
+        'parse_mode' => 'html'
+    ]);
     exit();
 }
 
-$get = json_decode($res, true);
-$video_url = $get['url'] ?? null;
+$api_data = json_decode($res, true);
+$video_url = extract_downloader_video_url($api_data, $res);
 
 // ❌ Video topilmasa
 if (!$video_url) {

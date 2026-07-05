@@ -13,10 +13,14 @@ $tx_clean = $matches[0] ?? $tx;
 // 1️⃣ Vizual progress bar
 $wait = send_progress_message($cid, $mid, $uid, "👻", 10, 200000, false);
 
-// 2️⃣ API orqali video olish
-$api = "https://api.wwiw.uz/downloader?url=" . urlencode($tx_clean);
+// 2️⃣ universalDownloader orqali video olish
+$api = "http://127.0.0.1:3001/api/snapchat/download?url=" . urlencode($tx_clean);
 $ch = curl_init($api);
-curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+curl_setopt_array($ch, [
+    CURLOPT_RETURNTRANSFER => true,
+    CURLOPT_TIMEOUT        => 60,
+    CURLOPT_CONNECTTIMEOUT => 15,
+]);
 $res = curl_exec($ch);
 $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
 curl_close($ch);
@@ -37,22 +41,17 @@ if ($res === false || $http_code != 200) {
     exit();
 }
 
-$get = json_decode($res, true);
-$video_url = null;
+$api_data = json_decode($res, true);
+$video_url = extract_downloader_video_url($api_data, $res);
 
-// 🔍 medias ichidan video URL topish
-if (!empty($get['data']['medias']) && is_array($get['data']['medias'])) {
-    foreach ($get['data']['medias'] as $media) {
+// 🔍 fallback: eski "medias" ro'yxati shaklida bo'lsa
+if (!$video_url && !empty($api_data['data']['medias']) && is_array($api_data['data']['medias'])) {
+    foreach ($api_data['data']['medias'] as $media) {
         if (!empty($media['type']) && $media['type'] === "video" && !empty($media['url'])) {
             $video_url = $media['url'];
             break;
         }
     }
-}
-
-// 🔹 fallback: agar media topilmasa
-if (!$video_url) {
-    $video_url = $get['data']['url'] ?? null;
 }
 
 // ❌ Video topilmasa

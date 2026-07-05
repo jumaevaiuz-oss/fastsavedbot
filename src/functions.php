@@ -330,3 +330,26 @@ function send_progress_message($cid, $mid, $uid, $emoji, $step_percent, $sleep_u
 
     return $wait;
 }
+
+// universalDownloader (http://127.0.0.1:3001) javobidan video havolasini
+// bir nechta mumkin bo'lgan joydan izlab topadi (endpoint'lar orasida javob
+// tuzilishi biroz farq qilishi mumkin). Hech biri mos kelmasa, keyinchalik
+// tekshirish uchun xom javobni error_log'ga yozadi va null qaytaradi.
+function extract_downloader_video_url($api_data, $raw_response = '')
+{
+    if (!empty($api_data['data']['url'])) {
+        return $api_data['data']['url'];
+    }
+    if (!empty($api_data['data']['formats'][0]['url'])) {
+        return $api_data['data']['formats'][0]['url'];
+    }
+    if (!empty($api_data['data']['video'])) {
+        return $api_data['data']['video'];
+    }
+    if (!empty($api_data['url'])) {
+        return $api_data['url'];
+    }
+
+    error_log("universalDownloader: video havolasi topilmadi. Xom javob: " . $raw_response);
+    return null;
+}
