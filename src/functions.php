@@ -379,14 +379,18 @@ function cobalt_youtube($url, $options = [])
         CURLOPT_POST => true,
         CURLOPT_HTTPHEADER => ['Content-Type: application/json', 'Accept: application/json'],
         CURLOPT_POSTFIELDS => json_encode($body),
-        CURLOPT_TIMEOUT => 30,
+        // Audio/video konvertatsiyasi (ayniqsa MP3ga o'girish) uzoqroq davom
+        // etishi mumkin, shuning uchun oddiy yuklab olishlarga qaraganda
+        // ancha uzunroq muddat berilgan.
+        CURLOPT_TIMEOUT => 120,
         CURLOPT_CONNECTTIMEOUT => 10,
     ]);
     $res = curl_exec($ch);
+    $curl_err = curl_error($ch);
     curl_close($ch);
 
     if (!$res) {
-        error_log("Cobalt YouTube API: javob olinmadi (curl xatosi).");
+        error_log("Cobalt YouTube API: javob olinmadi (curl xatosi: $curl_err).");
         return null;
     }
 

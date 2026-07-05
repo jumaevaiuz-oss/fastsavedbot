@@ -983,6 +983,11 @@ if (mb_strpos((string)$callbackdata, "yt_v_") === 0) {
 
     bot('sendMessage', ['chat_id' => $cid2, 'text' => "⏳ {$quality}p yuklanmoqda..."]);
 
+    // Konvertatsiya uzoq davom etishi mumkin — PHP skriptning o'zi vaqtidan
+    // oldin o'ldirilib, hech qanday xabar yubormay "qotib qolmasligi" uchun
+    // vaqt chegarasini kengaytiramiz (hosting cheklovi ruxsat bergan holda).
+    @set_time_limit(150);
+
     $video_url = cobalt_youtube($yt_url, ['videoQuality' => $quality]);
 
     if ($video_url) {
@@ -1028,6 +1033,10 @@ if (mb_strpos((string)$callbackdata, "yt_a_") === 0) {
     }
 
     bot('sendMessage', ['chat_id' => $cid2, 'text' => "⏳ MP3 {$bitrate}kbps yuklanmoqda..."]);
+
+    // Audio konvertatsiyasi uzoq davom etishi mumkin — skript vaqtidan oldin
+    // o'ldirilib, hech qanday xabar yubormay "qotib qolmasligi" uchun.
+    @set_time_limit(150);
 
     $audio_url = cobalt_youtube($yt_url, [
         'downloadMode' => 'audio',
