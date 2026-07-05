@@ -524,15 +524,15 @@ if ($data == "boshqarish") {
 if ($text == "✉ Xabar Yuborish" and admin($cid) == 1) {
     $result = mysqli_query($connect, "SELECT * FROM `send`");
     $row = mysqli_fetch_assoc($result);
-    $status = $row['status'];
-    $sends_count = $row['sends_count'];
-    $statistics = $row['statistics'];
-    $receive_count = $row['receive_count'];
     if (!$row) {
         sms($cid, "<b>📬 Foydalanuvchilarga yuboriladigan xabarni kiriting:</b>", $aort);
         step($cid, "send");
         exit();
     } else {
+        $status = $row['status'];
+        $sends_count = $row['sends_count'];
+        $statistics = $row['statistics'];
+        $receive_count = $row['receive_count'];
         if ($status == "resume") {
             $kb = json_encode([
                 'inline_keyboard' => [
@@ -547,7 +547,6 @@ if ($text == "✉ Xabar Yuborish" and admin($cid) == 1) {
                     [['text' => "🗑 O'chirish", 'callback_data' => "bekorqilish_send"]]
                 ]
             ]);
-            exit();
         }
         sms($cid, "<b>✅ Yuborildi:</b> <code>$sends_count/$statistics</code>
 <b>📥 Qabul qilindi:</b> <code>$receive_count</code>
@@ -571,7 +570,7 @@ if ($step == "send") {
     $user_id = $row['user_id'];
     $time1 = date('H:i', strtotime('+1 minutes'));
     $time2 = date('H:i', strtotime('+2 minutes'));
-    $tugma = json_encode($update->message->reply_markup);
+    $tugma = json_encode($update->message->reply_markup ?? null);
     $reply_markup = base64_encode($tugma);
     $stat = $connect->query("SELECT COUNT(*) AS cnt FROM users")->fetch_assoc()['cnt'];
     $edit_mess_id = sms($cid, "<b>✅ Yuborildi:</b> <code>0/$stat</code>
@@ -670,8 +669,11 @@ if ($step == "socialnetwork_step2" and admin($cid) == 1) {
         $nom = file_get_contents("step/trash_social_$cid.txt");
         if ($nom !== false) {
             $nom = base64_encode($nom);
-            $sql = "INSERT INTO `kanallar` (`type`, `link`, `title`, `channelID`) VALUES ('social', '$text', '$nom', '')";
-            if ($connect->query($sql)) {
+            $stmt = $connect->prepare("INSERT INTO `kanallar` (`type`, `link`, `title`, `channelID`) VALUES ('social', ?, ?, '')");
+            $stmt->bind_param("ss", $text, $nom);
+            $insert_ok = $stmt->execute();
+            $stmt->close();
+            if ($insert_ok) {
                 unlink("step/trash_social_$cid.txt");
                 sms($cid, "<b>✅ Kanal muvoffaqiyatli qo‘shildi</b>", $panel);
                 step($cid, "none");
@@ -997,7 +999,6 @@ if (
         CURLOPT_USERAGENT => 'Mozilla/5.0',
         CURLOPT_TIMEOUT => 25,           // ⏱ 25 soniyada javob bo'lmasa, to'xtaydi
         CURLOPT_CONNECTTIMEOUT => 10,    // ⏱ 10 soniyada ulanmasa, to'xtaydi
-        CURLOPT_SSL_VERIFYPEER => false  // HTTPS xatolarida to‘xtamasin
     ]);
     $res = curl_exec($ch);
     $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -1086,7 +1087,7 @@ if (mb_strpos((string)$callbackdata, "next_") === 0 || mb_strpos($callbackdata, 
 
     $api = "https://6831eecaafce3.xvest3.ru/fastsavedbot/api/musicapi.php?title=$query";
     $ch_music = curl_init($api);
-    curl_setopt_array($ch_music, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 25, CURLOPT_CONNECTTIMEOUT => 10, CURLOPT_SSL_VERIFYPEER => false]);
+    curl_setopt_array($ch_music, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 25, CURLOPT_CONNECTTIMEOUT => 10]);
     $res = curl_exec($ch_music);
     curl_close($ch_music);
     $result = json_decode($res, true);
@@ -1162,7 +1163,7 @@ if (mb_strpos((string)$callbackdata, "playmusic_") === 0) {
 
     $api = "https://6831eecaafce3.xvest3.ru/fastsavedbot/api/musicapi.php?title=$query";
     $ch_music = curl_init($api);
-    curl_setopt_array($ch_music, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 25, CURLOPT_CONNECTTIMEOUT => 10, CURLOPT_SSL_VERIFYPEER => false]);
+    curl_setopt_array($ch_music, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 25, CURLOPT_CONNECTTIMEOUT => 10]);
     $data = json_decode(curl_exec($ch_music), true);
     curl_close($ch_music);
     if (!$data || !isset($data[$index])) exit();

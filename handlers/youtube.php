@@ -20,7 +20,6 @@ curl_setopt_array($ch, [
     CURLOPT_RETURNTRANSFER => true,
     CURLOPT_TIMEOUT        => 60,
     CURLOPT_CONNECTTIMEOUT => 15,
-    CURLOPT_SSL_VERIFYPEER => false,
 ]);
 $res = curl_exec($ch);
 $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);

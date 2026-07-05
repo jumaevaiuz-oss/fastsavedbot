@@ -40,13 +40,15 @@ if ($res === false || $http_code != 200) {
     exit();
 }
 
-$data = json_decode($res, true);
+// Muhim: global $data (callback_query ma'lumoti) bilan chalkashmasin deb
+// alohida nom ishlatilgan.
+$api_data = json_decode($res, true);
 $video_url = null;
 
-if (!empty($data['video_url'])) {
-    $video_url = $data['video_url'];
-} elseif (!empty($data['data']['medias'][0]['url'])) {
-    $video_url = $data['data']['medias'][0]['url'];
+if (!empty($api_data['video_url'])) {
+    $video_url = $api_data['video_url'];
+} elseif (!empty($api_data['data']['medias'][0]['url'])) {
+    $video_url = $api_data['data']['medias'][0]['url'];
 }
 
 // 🔍 fallback .mp4 link
