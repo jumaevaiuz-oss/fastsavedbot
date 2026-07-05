@@ -961,101 +961,13 @@ if (mb_stripos((string)$tx, "snapchat.com/spotlight") !== false) {
 }
 
 
-// 𝗬𝗼𝘂𝗧𝘂𝗯𝗲 (video/audio sifat tanlash tugmalari bilan)
-if (mb_stripos((string)$tx, "youtube.com") !== false || mb_stripos((string)$tx, "youtu.be") !== false) {
+// 𝗬𝗼𝘂𝗧𝘂𝗯𝗲 𝗦𝗵𝗼𝗿𝘁𝘀 (video, captionsiz)
+if (mb_stripos((string)$tx, "youtube.com/shorts") !== false) {
+    require __DIR__ . '/handlers/youtube_shorts.php';
+}
+// 𝗬𝗼𝘂𝗧𝘂𝗯𝗲 (oddiy video/musiqa havolasi — faqat audio/MP3 yuklab beriladi)
+elseif (mb_stripos((string)$tx, "youtube.com") !== false || mb_stripos((string)$tx, "youtu.be") !== false) {
     require __DIR__ . '/handlers/youtube.php';
-}
-
-// 🎬 YouTube: video sifati tanlandi
-if (mb_strpos((string)$callbackdata, "yt_v_") === 0) {
-    $quality = str_replace("yt_v_", "", $callbackdata);
-    bot('answerCallbackQuery', ['callback_query_id' => $qid]);
-
-    if (!in_array($quality, ['1080', '720', '480', '360'], true)) {
-        exit();
-    }
-
-    $yt_url = file_exists("step/yt_$cid2.txt") ? file_get_contents("step/yt_$cid2.txt") : null;
-    if (!$yt_url) {
-        bot('sendMessage', ['chat_id' => $cid2, 'text' => "❌ Havola muddati tugagan, qaytadan yuboring."]);
-        exit();
-    }
-
-    bot('sendMessage', ['chat_id' => $cid2, 'text' => "⏳ {$quality}p yuklanmoqda..."]);
-
-    // Konvertatsiya uzoq davom etishi mumkin — PHP skriptning o'zi vaqtidan
-    // oldin o'ldirilib, hech qanday xabar yubormay "qotib qolmasligi" uchun
-    // vaqt chegarasini kengaytiramiz (hosting cheklovi ruxsat bergan holda).
-    @set_time_limit(150);
-
-    $video_url = cobalt_youtube($yt_url, ['videoQuality' => $quality]);
-
-    if ($video_url) {
-        $headers = @get_headers($video_url, 1);
-        $size = 0;
-        if (isset($headers['Content-Length'])) {
-            $size = (int) (is_array($headers['Content-Length']) ? end($headers['Content-Length']) : $headers['Content-Length']);
-        }
-
-        if ($size > 50 * 1024 * 1024) {
-            bot('sendMessage', [
-                'chat_id' => $cid2,
-                'text' => "📥 Video hajmi katta, to'g'ridan-to'g'ri yuklab oling:\n$video_url"
-            ]);
-        } else {
-            bot('sendVideo', ['chat_id' => $cid2, 'video' => $video_url]);
-        }
-
-        $platform = "youtube";
-        $stmt = $connect->prepare("INSERT INTO video_downloads (user_id, platform) VALUES (?, ?)");
-        $stmt->bind_param("is", $callfrid, $platform);
-        $stmt->execute();
-        $stmt->close();
-    } else {
-        bot('sendMessage', ['chat_id' => $cid2, 'text' => "❌ Video yuklab bo'lmadi."]);
-    }
-    exit();
-}
-
-// 🎵 YouTube: audio formati tanlandi
-if (mb_strpos((string)$callbackdata, "yt_a_") === 0) {
-    $bitrate = str_replace("yt_a_", "", $callbackdata);
-    bot('answerCallbackQuery', ['callback_query_id' => $qid]);
-
-    if (!in_array($bitrate, ['320', '128'], true)) {
-        exit();
-    }
-
-    $yt_url = file_exists("step/yt_$cid2.txt") ? file_get_contents("step/yt_$cid2.txt") : null;
-    if (!$yt_url) {
-        bot('sendMessage', ['chat_id' => $cid2, 'text' => "❌ Havola muddati tugagan, qaytadan yuboring."]);
-        exit();
-    }
-
-    bot('sendMessage', ['chat_id' => $cid2, 'text' => "⏳ MP3 {$bitrate}kbps yuklanmoqda..."]);
-
-    // Audio konvertatsiyasi uzoq davom etishi mumkin — skript vaqtidan oldin
-    // o'ldirilib, hech qanday xabar yubormay "qotib qolmasligi" uchun.
-    @set_time_limit(150);
-
-    $audio_url = cobalt_youtube($yt_url, [
-        'downloadMode' => 'audio',
-        'audioFormat' => 'mp3',
-        'audioBitrate' => $bitrate
-    ]);
-
-    if ($audio_url) {
-        bot('sendAudio', ['chat_id' => $cid2, 'audio' => $audio_url]);
-
-        $platform = "youtube";
-        $stmt = $connect->prepare("INSERT INTO video_downloads (user_id, platform) VALUES (?, ?)");
-        $stmt->bind_param("is", $callfrid, $platform);
-        $stmt->execute();
-        $stmt->close();
-    } else {
-        bot('sendMessage', ['chat_id' => $cid2, 'text' => "❌ Audio yuklab bo'lmadi."]);
-    }
-    exit();
 }
 
 
