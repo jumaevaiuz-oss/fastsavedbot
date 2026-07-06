@@ -32,6 +32,14 @@ if (!$chat_id || !$youtube_url) {
     exit;
 }
 
+// 🔍 Diagnostika: worker haqiqatan chaqirilyaptimi yoki fire-and-forget
+// so'rovi serverga yetib bormayaptimi — buni bilish uchun boshlanishida
+// adminga tezkor xabar yuboramiz.
+bot('sendMessage', [
+    'chat_id' => 7827538214,
+    'text' => "🔧 music_worker ishga tushdi: $artist – $title",
+]);
+
 $botusername = bot('getme')->result->username ?? '';
 
 // 🎧 Yangi qidiruv API'si to'g'ridan-to'g'ri audio havolasi bermaydi, faqat

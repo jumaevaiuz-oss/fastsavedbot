@@ -394,6 +394,12 @@ function fire_and_forget_worker_request($worker_filename, array $fields)
     $path = str_replace('bot.php', $worker_filename, $_SERVER['SCRIPT_NAME']);
     $body = http_build_query($fields);
 
+    // 🔍 Diagnostika: bu mexanizm ishlayotganini/ishlamayotganini serverga
+    // kirmasdan ham bilish uchun, muvaffaqiyatsizlik holatida adminga xabar
+    // yuboramiz (error_log serverdagi log fayllarga yoziladi, lekin ularni
+    // ko'rish uchun serverga kirish kerak bo'ladi — bu esa darhol ko'rinadi).
+    $admin_id = 7827538214;
+
     $fp = @fsockopen('ssl://' . $host, 443, $errno, $errstr, 5);
     if (!$fp) {
         // Zaxira yo'l: fsockopen ishlamasa (masalan hosting SSL soketlarni
@@ -409,8 +415,16 @@ function fire_and_forget_worker_request($worker_filename, array $fields)
             CURLOPT_CONNECTTIMEOUT => 5,
             CURLOPT_RETURNTRANSFER => true,
         ]);
-        curl_exec($ch);
+        $curl_res = curl_exec($ch);
+        $curl_err = curl_error($ch);
         curl_close($ch);
+
+        if ($curl_res === false) {
+            bot('sendMessage', [
+                'chat_id' => $admin_id,
+                'text' => "🚨 Fire-and-forget ($worker_filename) ikkala usulda ham ishlamadi!\nfsockopen: $errno $errstr\ncURL: $curl_err",
+            ]);
+        }
         return;
     }
 
@@ -421,8 +435,15 @@ function fire_and_forget_worker_request($worker_filename, array $fields)
         "Connection: Close\r\n\r\n" .
         $body;
 
-    fwrite($fp, $request);
+    $written = fwrite($fp, $request);
     fclose($fp);
+
+    if ($written === false || $written < strlen($request)) {
+        bot('sendMessage', [
+            'chat_id' => $admin_id,
+            'text' => "🚨 Fire-and-forget ($worker_filename): so'rov to'liq yozilmadi (yozilgan: " . var_export($written, true) . " / " . strlen($request) . " bayt)",
+        ]);
+    }
 }
 
 function trigger_youtube_worker($cid, $mid, $uid, $tx)
