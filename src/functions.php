@@ -520,3 +520,53 @@ function cobalt_youtube($url, $options = [])
             return null;
     }
 }
+
+// Cobalt tunnel havolasidan audio faylini o'zimiz yuklab olib, Telegram'ga
+// havola sifatida emas, balki fayl sifatida (multipart) yuboradi. Telegram
+// ba'zan tunnel havolasidan to'g'ridan-to'g'ri o'zi yuklab ololmaydi
+// ("Bad Request: failed to get HTTP URL content"), shu sabab bu funksiya
+// shu ikkala oqim (YouTube audio, musiqa) uchun ham ishlatiladi.
+// Qaytaradi: Telegram sendAudio javobi (obyekt) yoki muvaffaqiyatsiz
+// yuklab olinsa null.
+function download_and_send_audio($chat_id, $cobalt_url, $filename, $reply_to_message_id = null)
+{
+    // sys_get_temp_dir() (odatda /tmp) bu serverda open_basedir tomonidan
+    // saytning o'z papkasidan tashqarida qoldirilgan — shu sabab saytning
+    // o'zidagi (allaqachon yozish huquqi tasdiqlangan) step/ papkasidan
+    // foydalanamiz.
+    $tmp_file = dirname(__DIR__) . '/step/' . uniqid('audio_') . '.mp3';
+
+    $context = stream_context_create([
+        'http' => [
+            'timeout' => 60,
+            'follow_location' => true,
+            // Ba'zi CDN'lar (masalan Google Video) User-Agent yo'q so'rovlarga
+            // bo'sh javob qaytaradi — shu sabab oddiy brauzer User-Agent
+            // yuboramiz.
+            'header' => "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36\r\n",
+        ],
+    ]);
+
+    $audio_data = @file_get_contents($cobalt_url, false, $context);
+
+    if (!$audio_data) {
+        error_log("download_and_send_audio: faylni yuklab bo'lmadi: $cobalt_url");
+        return null;
+    }
+
+    file_put_contents($tmp_file, $audio_data);
+
+    $send_fields = [
+        'chat_id' => $chat_id,
+        'audio' => new CURLFile($tmp_file, 'audio/mpeg', $filename),
+    ];
+    if ($reply_to_message_id) {
+        $send_fields['reply_to_message_id'] = $reply_to_message_id;
+    }
+
+    $result = bot('sendAudio', $send_fields);
+
+    @unlink($tmp_file);
+
+    return $result;
+}

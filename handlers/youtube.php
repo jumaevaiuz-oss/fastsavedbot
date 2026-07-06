@@ -50,18 +50,14 @@ bot('deleteMessage', [
     'message_id' => $wait
 ]);
 
-// 3️⃣ Audio yuborish — havola sifatida to'g'ridan-to'g'ri (Telegram'ning
-// o'zi tunnel havolasidan yuklab oladi).
-$send_result = bot('sendAudio', [
-    'chat_id' => $cid,
-    'audio' => $audio_url,
-    'reply_to_message_id' => $mid,
-]);
+// 3️⃣ Audio yuborish — Telegram Cobalt tunnel havolasini o'zi
+// to'g'ridan-to'g'ri ololmagani sababli ("Bad Request: failed to get HTTP
+// URL content"), avval o'zimiz yuklab olib, fayl sifatida yuboramiz.
+$send_result = download_and_send_audio($cid, $audio_url, 'audio.mp3', $mid);
 
-// ❌ Telegram audio havolasini ololmasa (masalan tunnel bilan bog'lanib
-// bo'lmasa), buni ko'rsatib beramiz
-if (empty($send_result->ok)) {
-    $tg_error = $send_result->description ?? 'Noma\'lum xato';
+// ❌ Faylni yuklab bo'lmadi yoki Telegram baribir rad etdi
+if (!$send_result || empty($send_result->ok)) {
+    $tg_error = $send_result->description ?? 'Faylni yuklab bo\'lmadi';
 
     bot('sendMessage', [
         'chat_id' => $cid,
@@ -70,7 +66,7 @@ if (empty($send_result->ok)) {
 
     bot('sendMessage', [
         'chat_id' => $admin_id,
-        'text' => "🚨 sendAudio (havola) xato berdi!\n🕓 " . date('Y-m-d H:i:s') . "\n💬 Telegram xatosi: $tg_error\n🔗 URL: $audio_url",
+        'text' => "🚨 YouTube audio yuborilmadi!\n🕓 " . date('Y-m-d H:i:s') . "\n💬 Xato: $tg_error\n🔗 URL: $audio_url",
         'parse_mode' => 'html'
     ]);
     exit();
