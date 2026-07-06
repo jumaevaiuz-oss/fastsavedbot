@@ -1009,7 +1009,7 @@ if (
     curl_setopt_array($ch, [
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_USERAGENT => 'Mozilla/5.0',
-        CURLOPT_TIMEOUT => 25,           // ⏱ 25 soniyada javob bo'lmasa, to'xtaydi
+        CURLOPT_TIMEOUT => 35,           // ⏱ 35 soniyada javob bo'lmasa, to'xtaydi
         CURLOPT_CONNECTTIMEOUT => 10,    // ⏱ 10 soniyada ulanmasa, to'xtaydi
     ]);
     $res = curl_exec($ch);
@@ -1101,7 +1101,7 @@ if (mb_strpos((string)$callbackdata, "next_") === 0 || mb_strpos($callbackdata, 
     @set_time_limit(40);
     $api = "https://uvicorn-gunicorn-fastapi-production-2d16.up.railway.app/search?q=$query";
     $ch_music = curl_init($api);
-    curl_setopt_array($ch_music, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 25, CURLOPT_CONNECTTIMEOUT => 10]);
+    curl_setopt_array($ch_music, [CURLOPT_RETURNTRANSFER => true, CURLOPT_USERAGENT => 'Mozilla/5.0', CURLOPT_TIMEOUT => 35, CURLOPT_CONNECTTIMEOUT => 10]);
     $res = curl_exec($ch_music);
     curl_close($ch_music);
     $decoded = json_decode($res, true);
@@ -1179,7 +1179,7 @@ if (mb_strpos((string)$callbackdata, "playmusic_") === 0) {
     @set_time_limit(40);
     $api = "https://uvicorn-gunicorn-fastapi-production-2d16.up.railway.app/search?q=$query";
     $ch_music = curl_init($api);
-    curl_setopt_array($ch_music, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 25, CURLOPT_CONNECTTIMEOUT => 10]);
+    curl_setopt_array($ch_music, [CURLOPT_RETURNTRANSFER => true, CURLOPT_USERAGENT => 'Mozilla/5.0', CURLOPT_TIMEOUT => 35, CURLOPT_CONNECTTIMEOUT => 10]);
     $decoded = json_decode(curl_exec($ch_music), true);
     curl_close($ch_music);
     $data = $decoded['results'] ?? null;

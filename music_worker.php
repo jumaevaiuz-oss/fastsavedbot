@@ -91,18 +91,35 @@ if ($check->num_rows == 0) {
 // bilan yiqilib tushardi. O'rniga saytning o'zidagi (allaqachon yozish
 // huquqi tasdiqlangan) step/ papkasidan foydalanamiz.
 $tmp_music = tempnam(__DIR__ . '/step', 'music_');
-$fh = fopen($tmp_music, 'w');
-$ch_dl = curl_init($music);
-curl_setopt_array($ch_dl, [
-    CURLOPT_FILE => $fh,
-    CURLOPT_TIMEOUT => 60,
-    CURLOPT_CONNECTTIMEOUT => 15,
-    CURLOPT_FOLLOWLOCATION => true,
-]);
-curl_exec($ch_dl);
-$dl_http_code = curl_getinfo($ch_dl, CURLINFO_HTTP_CODE);
-curl_close($ch_dl);
-fclose($fh);
+
+// 🔁 Tunnel havolasi ba'zan bir martalik "hiqichoq" beradi (HTTP 200 lekin
+// 0 bayt) — shu sabab bitta muvaffaqiyatsiz urinishdan keyin darhol taslim
+// bo'lmasdan, qisqa pauzadan so'ng yana bir marta urinib ko'ramiz.
+for ($attempt = 1; $attempt <= 2; $attempt++) {
+    $fh = fopen($tmp_music, 'w');
+    $ch_dl = curl_init($music);
+    curl_setopt_array($ch_dl, [
+        CURLOPT_FILE => $fh,
+        CURLOPT_TIMEOUT => 60,
+        CURLOPT_CONNECTTIMEOUT => 15,
+        CURLOPT_FOLLOWLOCATION => true,
+        // Ba'zi CDN'lar (masalan Google Video) User-Agent yo'q so'rovlarga
+        // HTTP 200 lekin bo'sh (0 bayt) javob qaytaradi — shu sabab oddiy
+        // brauzer User-Agent yuboramiz.
+        CURLOPT_USERAGENT => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+    ]);
+    curl_exec($ch_dl);
+    $dl_http_code = curl_getinfo($ch_dl, CURLINFO_HTTP_CODE);
+    curl_close($ch_dl);
+    fclose($fh);
+
+    if ($dl_http_code == 200 && filesize($tmp_music) >= 1000) {
+        break;
+    }
+    if ($attempt < 2) {
+        sleep(2);
+    }
+}
 
 if ($dl_http_code != 200 || filesize($tmp_music) < 1000) {
     @unlink($tmp_music);
