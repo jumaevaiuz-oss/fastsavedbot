@@ -1002,6 +1002,7 @@ if (
     mb_stripos($text, "snapchat.com") === false
 ) {
     $query = urlencode($text);
+    @set_time_limit(40);
     $api = "https://uvicorn-gunicorn-fastapi-production-2d16.up.railway.app/search?q=$query";
 
     $ch = curl_init($api);
@@ -1097,6 +1098,7 @@ if (mb_strpos((string)$callbackdata, "next_") === 0 || mb_strpos($callbackdata, 
     $page = (int)$parts[1];
     $query = $parts[2];
 
+    @set_time_limit(40);
     $api = "https://uvicorn-gunicorn-fastapi-production-2d16.up.railway.app/search?q=$query";
     $ch_music = curl_init($api);
     curl_setopt_array($ch_music, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 25, CURLOPT_CONNECTTIMEOUT => 10]);
@@ -1174,6 +1176,7 @@ if (mb_strpos((string)$callbackdata, "playmusic_") === 0) {
     $index = (int)$parts[1];
     $query = $parts[2];
 
+    @set_time_limit(40);
     $api = "https://uvicorn-gunicorn-fastapi-production-2d16.up.railway.app/search?q=$query";
     $ch_music = curl_init($api);
     curl_setopt_array($ch_music, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 25, CURLOPT_CONNECTTIMEOUT => 10]);
@@ -1186,76 +1189,12 @@ if (mb_strpos((string)$callbackdata, "playmusic_") === 0) {
     $title  = $track['title'];
     $artist = $track['artist'];
 
-    // 🎧 Yangi API endi to'g'ridan-to'g'ri audio havolasi bermaydi, faqat
-    // YouTube havolasini beradi — shu sabab Cobalt API orqali audio
-    // (MP3, 320kbps) havolasini olamiz.
-    $music = cobalt_youtube($track['url'], [
-        'downloadMode' => 'audio',
-        'audioFormat' => 'mp3',
-        'audioBitrate' => '320'
-    ]);
-
-    if (!$music) {
-        bot('sendMessage', [
-            'chat_id' => $callcid,
-            'text' => lang('music_not_found', $callfrid)
-        ]);
-        exit();
-    }
-
-    // 🔹 Top songs bazasini yangilash
-    $stmt = $connect->prepare("SELECT id FROM top_songs WHERE music_url = ? LIMIT 1");
-    $stmt->bind_param("s", $music);
-    $stmt->execute();
-    $check = $stmt->get_result();
-    $stmt->close();
-
-    if ($check->num_rows == 0) {
-        $stmt = $connect->prepare("INSERT INTO top_songs (title, artist, music_url, downloads) VALUES (?, ?, ?, 1)");
-        $stmt->bind_param("sss", $title, $artist, $music);
-        $stmt->execute();
-        $stmt->close();
-    } else {
-        $stmt = $connect->prepare("UPDATE top_songs SET downloads = downloads + 1 WHERE music_url = ?");
-        $stmt->bind_param("s", $music);
-        $stmt->execute();
-        $stmt->close();
-    }
-
-    // 🎧 Musiqani yuborish — Telegram ba'zan Cobalt tunnel havolasini
-    // to'g'ridan-to'g'ri o'zi ololmaydi ("Bad Request: failed to get HTTP
-    // URL content"), shu sabab avval o'zimiz yuklab olib, fayl sifatida
-    // yuboramiz (xuddi YouTube audio oqimidagi kabi).
-    $tmp_music = tempnam(sys_get_temp_dir(), 'music_');
-    $fh = fopen($tmp_music, 'w');
-    $ch_dl = curl_init($music);
-    curl_setopt_array($ch_dl, [
-        CURLOPT_FILE => $fh,
-        CURLOPT_TIMEOUT => 60,
-        CURLOPT_CONNECTTIMEOUT => 15,
-        CURLOPT_FOLLOWLOCATION => true,
-    ]);
-    curl_exec($ch_dl);
-    $dl_http_code = curl_getinfo($ch_dl, CURLINFO_HTTP_CODE);
-    curl_close($ch_dl);
-    fclose($fh);
-
-    if ($dl_http_code != 200 || filesize($tmp_music) < 1000) {
-        @unlink($tmp_music);
-        bot('sendMessage', [
-            'chat_id' => $callcid,
-            'text' => lang('technical', $callfrid)
-        ]);
-        exit();
-    }
-
-    bot('sendAudio', [
-        'chat_id' => $callcid,
-        'audio' => new CURLFile($tmp_music, 'audio/mpeg', 'audio.mp3'),
-        'caption' => "<b>🎵 $artist – $title</b>\n\n<b>Via @$botusername</b>",
-        'parse_mode' => 'HTML'
-    ]);
-    @unlink($tmp_music);
+    // ⚡ Cobalt konvertatsiyasi + yuklab olish + Telegram'ga yuklash uzoq
+    // davom etishi mumkin (PHP skript vaqt chegarasidan oshib, hech qanday
+    // xabar yubormay "jim" to'xtab qolishi mumkin) — xuddi YouTube audio
+    // oqimidagi kabi, shu sabab og'ir ishni alohida so'rovga
+    // (music_worker.php) fire-and-forget tarzda topshiramiz.
+    trigger_music_worker($callcid, $callfrid, $title, $artist, $track['url']);
 
     exit();
 }

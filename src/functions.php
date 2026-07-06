@@ -384,18 +384,15 @@ function youtube_worker_secret()
     return hash('sha256', API_KEY . '|youtube_worker_v1');
 }
 
-function trigger_youtube_worker($cid, $mid, $uid, $tx)
+// Umumiy "fire-and-forget" yuboruvchi: berilgan worker fayliga (bot.php bilan
+// bir joyda joylashgan) so'rovni yozib, JAVOBNI KUTMASDAN darhol soketni
+// yopadi — shu bilan chaqiruvchi kod (bot.php) kutib o'tirmasdan davom etadi,
+// worker esa ignore_user_abort(true) tufayli ishlov berishni davom ettiradi.
+function fire_and_forget_worker_request($worker_filename, array $fields)
 {
     $host = $_SERVER['HTTP_HOST'];
-    $path = str_replace('bot.php', 'youtube_worker.php', $_SERVER['SCRIPT_NAME']);
-
-    $body = http_build_query([
-        'secret' => youtube_worker_secret(),
-        'cid' => $cid,
-        'mid' => $mid,
-        'uid' => $uid,
-        'tx' => $tx,
-    ]);
+    $path = str_replace('bot.php', $worker_filename, $_SERVER['SCRIPT_NAME']);
+    $body = http_build_query($fields);
 
     $fp = @fsockopen('ssl://' . $host, 443, $errno, $errstr, 5);
     if (!$fp) {
@@ -403,7 +400,7 @@ function trigger_youtube_worker($cid, $mid, $uid, $tx)
         // to'sib qo'ygan bo'lsa), qisqa timeout bilan cURL orqali urinib
         // ko'ramiz — javobni butunlay kutmaymiz (aks holda bot.php uzoq
         // "osilib" qolib, xuddi avvalgi muammoni qaytarib chiqaradi).
-        error_log("YouTube worker: fsockopen muvaffaqiyatsiz ($errno: $errstr) — cURL orqali qayta urinib ko'ramiz.");
+        error_log("Fire-and-forget ($worker_filename): fsockopen muvaffaqiyatsiz ($errno: $errstr) — cURL orqali qayta urinib ko'ramiz.");
         $ch = curl_init('https://' . $host . $path);
         curl_setopt_array($ch, [
             CURLOPT_POST => true,
@@ -426,6 +423,34 @@ function trigger_youtube_worker($cid, $mid, $uid, $tx)
 
     fwrite($fp, $request);
     fclose($fp);
+}
+
+function trigger_youtube_worker($cid, $mid, $uid, $tx)
+{
+    fire_and_forget_worker_request('youtube_worker.php', [
+        'secret' => youtube_worker_secret(),
+        'cid' => $cid,
+        'mid' => $mid,
+        'uid' => $uid,
+        'tx' => $tx,
+    ]);
+}
+
+// Musiqa yuklab olish/yuborish ishi ham uzoq davom etishi mumkin (Cobalt
+// konvertatsiyasi + yuklab olish + Telegram'ga yuklash), shu sabab u ham
+// xuddi YouTube audio kabi alohida so'rovga (music_worker.php) fire-and-forget
+// tarzda topshiriladi — aks holda PHP skript vaqt chegarasidan oshib,
+// hech qanday xabar yubormasdan "jim" to'xtab qolishi mumkin edi.
+function trigger_music_worker($chat_id, $uid, $title, $artist, $youtube_url)
+{
+    fire_and_forget_worker_request('music_worker.php', [
+        'secret' => youtube_worker_secret(),
+        'chat_id' => $chat_id,
+        'uid' => $uid,
+        'title' => $title,
+        'artist' => $artist,
+        'youtube_url' => $youtube_url,
+    ]);
 }
 
 // Cobalt API orqali YouTube uchun sifat/format tanlab yuklab olish
