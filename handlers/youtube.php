@@ -49,7 +49,12 @@ if (!$audio_url) {
 // vaqtinchalik/bir martalik bo'lgani yoki Telegram so'rovi bloklangani
 // sabab bo'lishi mumkin). Shu sabab faylni avval o'zimiz yuklab olib,
 // Telegram'ga havola sifatida emas, balki fayl sifatida (multipart) yuboramiz.
-$tmp_file = tempnam(sys_get_temp_dir(), 'ytaudio_');
+// sys_get_temp_dir() (odatda /tmp) ko'p shared hostinglarda open_basedir
+// tomonidan saytning o'z papkasidan tashqarida qoldirilgan bo'ladi — shu
+// sabab tempnam() shu yerda "false" qaytarib, keyingi fopen() ValueError
+// bilan yiqilib tushardi. O'rniga saytning o'zidagi (allaqachon yozish
+// huquqi tasdiqlangan) step/ papkasidan foydalanamiz.
+$tmp_file = tempnam(dirname(__DIR__) . '/step', 'ytaudio_');
 $fh = fopen($tmp_file, 'w');
 $ch = curl_init($audio_url);
 curl_setopt_array($ch, [

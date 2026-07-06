@@ -32,14 +32,6 @@ if (!$chat_id || !$youtube_url) {
     exit;
 }
 
-// 🔍 Diagnostika: worker haqiqatan chaqirilyaptimi yoki fire-and-forget
-// so'rovi serverga yetib bormayaptimi — buni bilish uchun boshlanishida
-// adminga tezkor xabar yuboramiz.
-bot('sendMessage', [
-    'chat_id' => 7827538214,
-    'text' => "🔧 music_worker ishga tushdi: $artist – $title",
-]);
-
 // 🔍 PHP fatal xatosi (masalan xotira yetishmasligi yoki kutilmagan tur
 // xatosi) yuz bersa ham, buni jim o'tkazib yubormasdan adminga xabar beramiz.
 register_shutdown_function(function () {
@@ -57,20 +49,10 @@ $botusername = bot('getme')->result->username ?? '';
 // 🎧 Yangi qidiruv API'si to'g'ridan-to'g'ri audio havolasi bermaydi, faqat
 // YouTube havolasini beradi — shu sabab Cobalt API orqali audio (MP3,
 // 320kbps) havolasini olamiz.
-bot('sendMessage', [
-    'chat_id' => 7827538214,
-    'text' => "🔧 music_worker: cobalt so'rovi boshlandi ($youtube_url)",
-]);
-
 $music = cobalt_youtube($youtube_url, [
     'downloadMode' => 'audio',
     'audioFormat' => 'mp3',
     'audioBitrate' => '320'
-]);
-
-bot('sendMessage', [
-    'chat_id' => 7827538214,
-    'text' => "🔧 music_worker: cobalt natijasi: " . ($music ?: 'NULL'),
 ]);
 
 if (!$music) {
@@ -103,7 +85,12 @@ if ($check->num_rows == 0) {
 // 🎧 Musiqani yuborish — Telegram ba'zan Cobalt tunnel havolasini
 // to'g'ridan-to'g'ri o'zi ololmaydi ("Bad Request: failed to get HTTP URL
 // content"), shu sabab avval o'zimiz yuklab olib, fayl sifatida yuboramiz.
-$tmp_music = tempnam(sys_get_temp_dir(), 'music_');
+// sys_get_temp_dir() (odatda /tmp) ko'p shared hostinglarda open_basedir
+// tomonidan saytning o'z papkasidan tashqarida qoldirilgan bo'ladi — shu
+// sabab tempnam() shu yerda "false" qaytarib, keyingi fopen() ValueError
+// bilan yiqilib tushardi. O'rniga saytning o'zidagi (allaqachon yozish
+// huquqi tasdiqlangan) step/ papkasidan foydalanamiz.
+$tmp_music = tempnam(__DIR__ . '/step', 'music_');
 $fh = fopen($tmp_music, 'w');
 $ch_dl = curl_init($music);
 curl_setopt_array($ch_dl, [
@@ -116,11 +103,6 @@ curl_exec($ch_dl);
 $dl_http_code = curl_getinfo($ch_dl, CURLINFO_HTTP_CODE);
 curl_close($ch_dl);
 fclose($fh);
-
-bot('sendMessage', [
-    'chat_id' => 7827538214,
-    'text' => "🔧 music_worker: yuklab olindi — HTTP $dl_http_code, hajm " . (file_exists($tmp_music) ? filesize($tmp_music) : 0) . " bayt",
-]);
 
 if ($dl_http_code != 200 || filesize($tmp_music) < 1000) {
     @unlink($tmp_music);
