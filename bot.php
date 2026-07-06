@@ -1002,7 +1002,7 @@ if (
     mb_stripos($text, "snapchat.com") === false
 ) {
     $query = urlencode($text);
-    $api = "https://6831eecaafce3.xvest3.ru/fastsavedbot/api/musicapi.php?title=$query";
+    $api = "https://uvicorn-gunicorn-fastapi-production-2d16.up.railway.app/search?q=$query";
 
     $ch = curl_init($api);
     curl_setopt_array($ch, [
@@ -1027,7 +1027,7 @@ if (
 
         // 👑 Adminga ogohlantirish (bot qotmasin, lekin admin bilsin)
         $admin_id = 7827538214; // o‘zingning admin ID’ing
-        $admin_text = "<b>⚠️ Pinkamuz API ishlamayapti!</b>\n\n" .
+        $admin_text = "<b>⚠️ Musiqa qidiruv API ishlamayapti!</b>\n\n" .
                       "🌐 <b>URL:</b> $api\n" .
                       "📡 <b>HTTP code:</b> $http_code\n" .
                       "💬 <b>Xato:</b> " . ($error ?: "Aniqlanmagan xato") . "\n\n" .
@@ -1042,10 +1042,11 @@ if (
         return; // ✅ faqat shu joydan chiqadi, bot ishlashda davom etadi
     }
 
-    $result = json_decode($res, true);
+    $decoded = json_decode($res, true);
+    $result = $decoded['results'] ?? null;
 
     // ❌ API natija qaytarmadi yoki xato bo‘ldi
-    if (!$result || isset($result['error'])) {
+    if (!$result || empty($decoded['success'])) {
         bot('sendMessage', [
             'chat_id' => $cid,
             'text' => lang('music_not_found', $uid)
@@ -1096,14 +1097,15 @@ if (mb_strpos((string)$callbackdata, "next_") === 0 || mb_strpos($callbackdata, 
     $page = (int)$parts[1];
     $query = $parts[2];
 
-    $api = "https://6831eecaafce3.xvest3.ru/fastsavedbot/api/musicapi.php?title=$query";
+    $api = "https://uvicorn-gunicorn-fastapi-production-2d16.up.railway.app/search?q=$query";
     $ch_music = curl_init($api);
     curl_setopt_array($ch_music, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 25, CURLOPT_CONNECTTIMEOUT => 10]);
     $res = curl_exec($ch_music);
     curl_close($ch_music);
-    $result = json_decode($res, true);
+    $decoded = json_decode($res, true);
+    $result = $decoded['results'] ?? null;
 
-    if (!$result || isset($result['error'])) {
+    if (!$result || empty($decoded['success'])) {
         bot('answerCallbackQuery', [
             'callback_query_id' => $qid,
             'text' => lang('music_not_found', $callfrid),
@@ -1172,17 +1174,34 @@ if (mb_strpos((string)$callbackdata, "playmusic_") === 0) {
     $index = (int)$parts[1];
     $query = $parts[2];
 
-    $api = "https://6831eecaafce3.xvest3.ru/fastsavedbot/api/musicapi.php?title=$query";
+    $api = "https://uvicorn-gunicorn-fastapi-production-2d16.up.railway.app/search?q=$query";
     $ch_music = curl_init($api);
     curl_setopt_array($ch_music, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 25, CURLOPT_CONNECTTIMEOUT => 10]);
-    $data = json_decode(curl_exec($ch_music), true);
+    $decoded = json_decode(curl_exec($ch_music), true);
     curl_close($ch_music);
+    $data = $decoded['results'] ?? null;
     if (!$data || !isset($data[$index])) exit();
 
     $track  = $data[$index];
     $title  = $track['title'];
     $artist = $track['artist'];
-    $music  = $track['music'];
+
+    // 🎧 Yangi API endi to'g'ridan-to'g'ri audio havolasi bermaydi, faqat
+    // YouTube havolasini beradi — shu sabab Cobalt API orqali audio
+    // (MP3, 320kbps) havolasini olamiz.
+    $music = cobalt_youtube($track['url'], [
+        'downloadMode' => 'audio',
+        'audioFormat' => 'mp3',
+        'audioBitrate' => '320'
+    ]);
+
+    if (!$music) {
+        bot('sendMessage', [
+            'chat_id' => $callcid,
+            'text' => lang('music_not_found', $callfrid)
+        ]);
+        exit();
+    }
 
     // 🔹 Top songs bazasini yangilash
     $stmt = $connect->prepare("SELECT id FROM top_songs WHERE music_url = ? LIMIT 1");
@@ -1203,13 +1222,40 @@ if (mb_strpos((string)$callbackdata, "playmusic_") === 0) {
         $stmt->close();
     }
 
-    // 🎧 Musiqani yuborish
+    // 🎧 Musiqani yuborish — Telegram ba'zan Cobalt tunnel havolasini
+    // to'g'ridan-to'g'ri o'zi ololmaydi ("Bad Request: failed to get HTTP
+    // URL content"), shu sabab avval o'zimiz yuklab olib, fayl sifatida
+    // yuboramiz (xuddi YouTube audio oqimidagi kabi).
+    $tmp_music = tempnam(sys_get_temp_dir(), 'music_');
+    $fh = fopen($tmp_music, 'w');
+    $ch_dl = curl_init($music);
+    curl_setopt_array($ch_dl, [
+        CURLOPT_FILE => $fh,
+        CURLOPT_TIMEOUT => 60,
+        CURLOPT_CONNECTTIMEOUT => 15,
+        CURLOPT_FOLLOWLOCATION => true,
+    ]);
+    curl_exec($ch_dl);
+    $dl_http_code = curl_getinfo($ch_dl, CURLINFO_HTTP_CODE);
+    curl_close($ch_dl);
+    fclose($fh);
+
+    if ($dl_http_code != 200 || filesize($tmp_music) < 1000) {
+        @unlink($tmp_music);
+        bot('sendMessage', [
+            'chat_id' => $callcid,
+            'text' => lang('technical', $callfrid)
+        ]);
+        exit();
+    }
+
     bot('sendAudio', [
         'chat_id' => $callcid,
-        'audio' => $music,
+        'audio' => new CURLFile($tmp_music, 'audio/mpeg', 'audio.mp3'),
         'caption' => "<b>🎵 $artist – $title</b>\n\n<b>Via @$botusername</b>",
         'parse_mode' => 'HTML'
     ]);
+    @unlink($tmp_music);
 
     exit();
 }
