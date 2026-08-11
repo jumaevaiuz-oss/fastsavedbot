@@ -355,10 +355,22 @@ function cobalt_download($video_url)
         return null;
     }
 
-    $data = json_decode($res, true);
+    $result = json_decode($res, true);
 
-    if (!empty($data['url'])) {
-        return $data['url'];
+    if (!empty($result['status'])) {
+        switch ($result['status']) {
+            case 'tunnel':
+            case 'redirect':
+                return $result['url'] ?? null;
+            case 'picker':
+                return $result['picker'][0]['url'] ?? null;
+            default:
+                break;
+        }
+    }
+
+    if (!empty($result['url'])) {
+        return $result['url'];
     }
 
     error_log("Cobalt API: video havolasi topilmadi. HTTP: $http_code Javob: $res");
