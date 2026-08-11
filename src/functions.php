@@ -331,49 +331,306 @@ function send_progress_message($cid, $mid, $uid, $emoji, $step_percent, $sleep_u
     return $wait;
 }
 
-// Cobalt API (https://cobalt-production-ea14.up.railway.app) orqali
-// YouTube/Instagram/TikTok/Snapchat havolasini to'g'ridan-to'g'ri yuklab
-// olish manziliga aylantiradi. Xato bo'lsa null qaytaradi va tashxis uchun
-// xom javobni error_log'ga yozadi.
+// =============================================
+// Cobalt API xatosini saqlash
+// =============================================
+$GLOBALS['last_cobalt_error'] = null;
+
+function get_last_cobalt_error()
+{
+    return $GLOBALS['last_cobalt_error'] ?? "Noma'lum Cobalt API xatosi.";
+}
+
+
+// =============================================
+// Cobalt API orqali video yuklab olish
+// TikTok / Instagram / YouTube / Snapchat
+// =============================================
 function cobalt_download($video_url)
 {
-    $ch = curl_init('https://cobalt-production-ea14.up.railway.app');
-    curl_setopt_array($ch, [
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_POST => true,
-        CURLOPT_HTTPHEADER => ['Content-Type: application/json', 'Accept: application/json'],
-        CURLOPT_POSTFIELDS => json_encode(['url' => $video_url]),
-        CURLOPT_TIMEOUT => 30,
-        CURLOPT_CONNECTTIMEOUT => 10,
-    ]);
-    $res = curl_exec($ch);
-    $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
+    $GLOBALS['last_cobalt_error'] = null;
 
-    if ($res === false || empty($res)) {
-        error_log("Cobalt API: javob olinmadi (curl xatosi).");
+    $api_url = 'https://cobalt-production-ea14.up.railway.app';
+
+    $payload = [
+        'url' => $video_url,
+
+        // Video uchun
+        'videoQuality' => '1080',
+
+        // Cobalt'ga kerak bo'lsa tunnel orqali beradi
+        'downloadMode' => 'auto',
+
+        // TikTok original ovozini olish
+        'tiktokFullAudio' => true
+    ];
+
+    $json_payload = json_encode(
+        $payload,
+        JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE
+    );
+
+    if ($json_payload === false) {
+        $GLOBALS['last_cobalt_error'] = 'JSON yaratilmadi.';
         return null;
     }
 
-    $result = json_decode($res, true);
+    $ch = curl_init($api_url);
 
-    if (!empty($result['status'])) {
-        switch ($result['status']) {
-            case 'tunnel':
-            case 'redirect':
-                return $result['url'] ?? null;
-            case 'picker':
-                return $result['picker'][0]['url'] ?? null;
-            default:
-                break;
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_POST => true,
+
+        CURLOPT_HTTPHEADER => [
+            'Content-Type: application/json',
+            'Accept: application/json'
+        ],
+
+        CURLOPT_POSTFIELDS => $json_payload,
+
+        CURLOPT_TIMEOUT => 60,
+        CURLOPT_CONNECTTIMEOUT => 10,
+
+        CURLOPT_FOLLOWLOCATION => false,
+
+        CURLOPT_USERAGENT =>
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) ' .
+            'AppleWebKit/537.36 (KHTML, like Gecko) ' .
+            'Chrome/131.0 Safari/537.36'
+    ]);
+
+    $res = curl_exec($ch);
+
+    $curl_error = curl_error($ch);
+    $curl_errno = curl_errno($ch);
+
+    $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+
+    curl_close($ch);
+
+
+    // -----------------------------------------
+    // cURL xatosi
+    // -----------------------------------------
+    if ($res === false || $res === '') {
+
+        $GLOBALS['last_cobalt_error'] =
+            "cURL xatosi\n" .
+            "Code: {$curl_errno}\n" .
+            "Xabar: {$curl_error}\n" .
+            "URL: {$video_url}";
+
+        error_log(
+            "Cobalt API CURL ERROR: " .
+            $GLOBALS['last_cobalt_error']
+        );
+
+        return null;
+    }
+
+
+    // -----------------------------------------
+    // JSON decode
+    // -----------------------------------------
+    $data = json_decode($res, true);
+
+
+    if (!is_array($data)) {
+
+        $GLOBALS['last_cobalt_error'] =
+            "Cobalt noto'g'ri JSON qaytardi.\n" .
+            "HTTP: {$http_code}\n" .
+            "Response: {$res}";
+
+        error_log(
+            "Cobalt API INVALID JSON: " .
+            $GLOBALS['last_cobalt_error']
+        );
+
+        return null;
+    }
+
+
+    // -----------------------------------------
+    // To'liq response log
+    // -----------------------------------------
+    error_log(
+        "Cobalt API RESPONSE [" .
+        $http_code .
+        "]: " .
+        $res
+    );
+
+
+    // -----------------------------------------
+    // STATUS
+    // -----------------------------------------
+    $status = $data['status'] ?? null;
+
+
+    // =========================================
+    // TUNNEL
+    // =========================================
+    if ($status === 'tunnel') {
+
+        if (!empty($data['url'])) {
+            return $data['url'];
         }
+
+        $GLOBALS['last_cobalt_error'] =
+            "Cobalt tunnel status berdi, lekin URL yo'q.\n" .
+            "Response: " . $res;
+
+        return null;
     }
 
-    if (!empty($result['url'])) {
-        return $result['url'];
+
+    // =========================================
+    // REDIRECT
+    // =========================================
+    if ($status === 'redirect') {
+
+        if (!empty($data['url'])) {
+            return $data['url'];
+        }
+
+        $GLOBALS['last_cobalt_error'] =
+            "Cobalt redirect status berdi, lekin URL yo'q.\n" .
+            "Response: " . $res;
+
+        return null;
     }
 
-    error_log("Cobalt API: video havolasi topilmadi. HTTP: $http_code Javob: $res");
+
+    // =========================================
+    // PICKER
+    // TikTok slideshow / bir nechta media
+    // =========================================
+    if ($status === 'picker') {
+
+        if (!empty($data['picker']) && is_array($data['picker'])) {
+
+            // Avval VIDEO qidiramiz
+            foreach ($data['picker'] as $item) {
+
+                if (
+                    isset($item['type']) &&
+                    $item['type'] === 'video' &&
+                    !empty($item['url'])
+                ) {
+                    return $item['url'];
+                }
+            }
+
+            // Video bo'lmasa GIF
+            foreach ($data['picker'] as $item) {
+
+                if (
+                    isset($item['type']) &&
+                    $item['type'] === 'gif' &&
+                    !empty($item['url'])
+                ) {
+                    return $item['url'];
+                }
+            }
+
+            // Oxirgi fallback
+            if (!empty($data['picker'][0]['url'])) {
+                return $data['picker'][0]['url'];
+            }
+        }
+
+        $GLOBALS['last_cobalt_error'] =
+            "Cobalt picker qaytardi, lekin media URL topilmadi.\n" .
+            "Response: " . $res;
+
+        return null;
+    }
+
+
+    // =========================================
+    // LOCAL PROCESSING
+    // =========================================
+    if ($status === 'local-processing') {
+
+        if (
+            !empty($data['tunnel']) &&
+            is_array($data['tunnel']) &&
+            !empty($data['tunnel'][0])
+        ) {
+            return $data['tunnel'][0];
+        }
+
+        $GLOBALS['last_cobalt_error'] =
+            "Cobalt local-processing qaytardi, " .
+            "lekin tunnel URL topilmadi.\n" .
+            "Response: " . $res;
+
+        return null;
+    }
+
+
+    // =========================================
+    // ERROR
+    // =========================================
+    if ($status === 'error') {
+
+        $error_code =
+            $data['error']['code'] ??
+            'unknown';
+
+        $error_context =
+            $data['error']['context'] ?? [];
+
+        $context_text = '';
+
+        if (!empty($error_context)) {
+            $context_text = "\nContext: " .
+                json_encode(
+                    $error_context,
+                    JSON_UNESCAPED_UNICODE |
+                    JSON_UNESCAPED_SLASHES
+                );
+        }
+
+        $GLOBALS['last_cobalt_error'] =
+            "Cobalt error\n" .
+            "HTTP: {$http_code}\n" .
+            "Code: {$error_code}" .
+            $context_text .
+            "\nURL: {$video_url}";
+
+        error_log(
+            "Cobalt API ERROR: " .
+            $GLOBALS['last_cobalt_error']
+        );
+
+        return null;
+    }
+
+
+    // =========================================
+    // Ba'zi eski/custom Cobalt versiyalar
+    // =========================================
+    if (!empty($data['url'])) {
+        return $data['url'];
+    }
+
+
+    // =========================================
+    // Noma'lum javob
+    // =========================================
+    $GLOBALS['last_cobalt_error'] =
+        "Noma'lum Cobalt response.\n" .
+        "HTTP: {$http_code}\n" .
+        "Response: {$res}\n" .
+        "URL: {$video_url}";
+
+    error_log(
+        "Cobalt API UNKNOWN RESPONSE: " .
+        $GLOBALS['last_cobalt_error']
+    );
+
     return null;
 }
 
