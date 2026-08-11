@@ -431,22 +431,28 @@ if (strpos((string)$data, "lang_") === 0) {
 }
 
 
-if ($music) {
-    $audio_url = $music['url'];
-    $title = $music['title'];
+// Agar foydalanuvchi matn yozgan bo'lsa va bu buyruq bo'lmasa:
+if ($text && $text != '/start') {
+    
+    // Qidiruv funksiyasiga bevosita $text ni beramiz
+    $music = search_and_download_music($text);
 
-    // Telegram bot orqali audio faylni yuborish
-    bot('sendAudio', [
-        'chat_id' => $cid,
-        'audio' => $audio_url,
-        'title' => $title,
-        'caption' => "📥 @FastSavedBot orqali yuklab olindi"
-    ]);
-} else {
-    bot('sendMessage', [
-        'chat_id' => $cid,
-        'text' => "❌ Musiqa topilmadi yoki yuklab bo'lmadi."
-    ]);
+    if ($music) {
+        $audio_url = $music['url'];
+        $title = $music['title'];
+
+        bot('sendAudio', [
+            'chat_id' => $cid,
+            'audio' => $audio_url,
+            'title' => $title,
+            'caption' => "📥 @FastSavedBot orqali yuklab olindi"
+        ]);
+    } else {
+        bot('sendMessage', [
+            'chat_id' => $cid,
+            'text' => "❌ Musiqa topilmadi yoki yuklab bo'lmadi."
+        ]);
+    }
 }
 
 
