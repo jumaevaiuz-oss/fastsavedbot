@@ -431,10 +431,12 @@ if (strpos((string)$data, "lang_") === 0) {
 }
 
 
-// Agar foydalanuvchi matn yozgan bo'lsa va bu buyruq bo'lmasa:
-if ($text && $text != '/start') {
+//Musiqa izlash
+// Agar xabar bo'sh bo'lmasa, /start emas va bu menyu tugmalaridan biri bo'lmasa
+$ignored_texts = ['Adminlar', 'Orqaga', 'Bosh menyu', 'Statistika', 'Xabar Yuborish', 'Kanal sozlash'];
+
+if ($text && $text != '/start' && !in_array($text, $ignored_texts)) {
     
-    // Qidiruv funksiyasiga bevosita $text ni beramiz
     $music = search_and_download_music($text);
 
     if ($music) {
