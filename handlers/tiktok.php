@@ -7,8 +7,25 @@ $platform = "tiktok";
 $admin_id = 7827538214; // 🛠 Admin ID
 
 // 🔹 Havolani tozalash
-preg_match('/https?:\/\/(vm|vt|www)\.tiktok\.com\/[^\s]+/i', $tx, $matches);
+preg_match('/https?:\/\/(vm|vt|www)\.tiktok\.com\/[^\s\?]+/i', $tx, $matches);
 $tx_clean = !empty($matches[0]) ? $matches[0] : $tx;
+
+// 🔄 Qisqa havolalarni (vt.tiktok.com / vm.tiktok.com) to'liq manzilga kengaytirish
+if (strpos($tx_clean, 'vt.tiktok.com') !== false || strpos($tx_clean, 'vm.tiktok.com') !== false) {
+    $ch = curl_init($tx_clean);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+    curl_setopt($ch, CURLOPT_HEADER, true);
+    curl_setopt($ch, CURLOPT_NOBODY, true);
+    curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)');
+    curl_exec($ch);
+    $full_url = curl_getinfo($ch, CURLINFO_EFFECTIVE_URL);
+    curl_close($ch);
+    
+    if ($full_url) {
+        $tx_clean = strtok($full_url, '?');
+    }
+}
 
 // 1️⃣ Vizual progress bar
 $wait = send_progress_message($cid, $mid, $uid, "🎬", 10, 200000, false);
