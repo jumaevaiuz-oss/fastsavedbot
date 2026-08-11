@@ -1,11 +1,7 @@
-<?php
-
 function search_and_download_music($query)
 {
-    // Railway'dagi shaxsiy API manzilingiz
     $api_url = 'https://ytdlp-search-production.up.railway.app/';
 
-    // Qidiruv so'zi yoki havola ekanligini aniqlaymiz
     $post_data = [];
     if (filter_var($query, FILTER_VALIDATE_URL)) {
         $post_data['url'] = $query;
@@ -30,14 +26,15 @@ function search_and_download_music($query)
     $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
 
+    // Shu yerga log qo'shamiz, xato nima ekanini server logidan ko'rasiz
+    error_log("Railway HTTP Code: $http_code, Response: $res");
+
     if ($res === false || empty($res)) {
-        error_log("ytdlp-search API: javob olinmadi.");
         return null;
     }
 
     $result = json_decode($res, true);
 
-    // Agar API'dan muvaffaqiyatli javob kelsa
     if ($http_code === 200 && !empty($result['url'])) {
         return [
             'title' => $result['title'] ?? 'Musiqa',
@@ -45,6 +42,5 @@ function search_and_download_music($query)
         ];
     }
 
-    error_log("ytdlp-search API xatosi. HTTP: $http_code Javob: $res");
     return null;
 }
