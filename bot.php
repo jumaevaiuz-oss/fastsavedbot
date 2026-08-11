@@ -24,7 +24,6 @@ if (defined('WEBHOOK_SECRET') && WEBHOOK_SECRET !== '' && ($_SERVER['REQUEST_MET
 require_once __DIR__ . '/src/functions.php'; // bot(), sms(), admin() va boshqa umumiy funksiyalar
 require_once __DIR__ . '/lang/user_lang.php';
 require_once __DIR__ . '/lang/translations.php';
-require_once __DIR__ . '/handlers/music.php';
 
 // PHP 8.2: Null safety uchun default qiymatlar
 $update      = json_decode(file_get_contents('php://input'));
