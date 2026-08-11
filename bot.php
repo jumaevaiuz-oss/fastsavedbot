@@ -431,33 +431,6 @@ if (strpos((string)$data, "lang_") === 0) {
 }
 
 
-//Musiqa izlash
-// Agar xabar bo'sh bo'lmasa, /start emas va bu menyu tugmalaridan biri bo'lmasa
-$ignored_texts = ['Adminlar', 'Orqaga', 'Bosh menyu', 'Statistika', 'Xabar Yuborish', 'Kanal sozlash'];
-
-if ($text && $text != '/start' && !in_array($text, $ignored_texts)) {
-    
-    $music = search_and_download_music($text);
-
-    if ($music) {
-        $audio_url = $music['url'];
-        $title = $music['title'];
-
-        bot('sendAudio', [
-            'chat_id' => $cid,
-            'audio' => $audio_url,
-            'title' => $title,
-            'caption' => "📥 @FastSavedBot orqali yuklab olindi"
-        ]);
-    } else {
-        bot('sendMessage', [
-            'chat_id' => $cid,
-            'text' => "❌ Musiqa topilmadi yoki yuklab bo'lmadi."
-        ]);
-    }
-}
-
-
 if ($data == "language") {
     bot('answerCallbackQuery', ['callback_query_id' => $qid]);
     $lang = get_user_lang($callfrid);
