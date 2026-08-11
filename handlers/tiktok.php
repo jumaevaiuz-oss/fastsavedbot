@@ -41,9 +41,12 @@ if (!$video_url) {
         'text' => lang('not_found', $uid)
     ]);
 
+    // Oxirgi xatolik tafsilotini olish uchun
+    $debug_info = function_exists('get_last_cobalt_error') ? get_last_cobalt_error() : "Havola: $tx_clean";
+
     bot('sendMessage', [
         'chat_id' => $admin_id,
-        'text' => "🚨 Cobalt API ishlamayapti!\n🕓 " . date('Y-m-d H:i:s') . "\n🔗 Platforma: TikTok\nTekshiruv talab etiladi.",
+        'text' => "🚨 <b>Cobalt API xatosi (TikTok)!</b>\n🕓 " . date('Y-m-d H:i:s') . "\n🔗 Havola: <code>" . htmlspecialchars($tx_clean) . "</code>\n\n🛠 <b>Sabab/Javob:</b>\n<code>" . htmlspecialchars(substr($debug_info, 0, 300)) . "</code>",
         'parse_mode' => 'html'
     ]);
     exit();
