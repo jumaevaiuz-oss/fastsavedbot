@@ -1,6 +1,6 @@
 <?php
 // =============================================
-// Umumiy yordamchi funksiyalar
+// Umumiy yordamchi funksiyalar.
 // Telegram API bilan ishlash, admin panel yordamchilari,
 // statistika, ommaviy xabar yuborish va yuklab olish progress-bar animatsiyasi.
 //
