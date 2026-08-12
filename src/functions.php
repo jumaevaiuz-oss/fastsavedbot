@@ -357,9 +357,13 @@ function cobalt_download($video_url)
 
     $data = json_decode($res, true);
 
-    if (!empty($data['url'])) {
-        return $data['url'];
+    // Yangi Cobalt format: status + url
+    if (!empty($data['url'])) return $data['url'];
+    if (!empty($data['status']) && in_array($data['status'], ['tunnel', 'redirect', 'stream'])) {
+        return $data['url'] ?? null;
     }
+    // picker (masalan Instagram ko'p video)
+    if (!empty($data['picker'][0]['url'])) return $data['picker'][0]['url'];
 
     error_log("Cobalt API: video havolasi topilmadi. HTTP: $http_code Javob: $res");
     return null;
