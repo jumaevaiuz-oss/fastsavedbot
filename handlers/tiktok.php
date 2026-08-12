@@ -4,7 +4,7 @@
 // $botusername kabi o'zgaruvchilar bu yerda ham bevosita mavjud.
 
 $platform = "tiktok";
-$admin_id = 7827538214; // 🛠 Admin ID
+$admin_id = 7827538214; // Admin ID
 
 // 🔹 Havolani tozalash
 preg_match('/https?:\/\/(vm|vt|www)\.tiktok\.com\/[^\s]+/i', $tx, $matches);
