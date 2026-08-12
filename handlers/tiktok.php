@@ -4,7 +4,7 @@
 // $botusername kabi o'zgaruvchilar bu yerda ham bevosita mavjud.
 
 $platform = "tiktok";
-$admin_id = 7827538214; // Admin ID
+$admin_id = 7827538214; // 🛠 Admin ID
 
 // 🔹 Havolani tozalash
 preg_match('/https?:\/\/(vm|vt|www)\.tiktok\.com\/[^\s]+/i', $tx, $matches);
@@ -15,8 +15,6 @@ $wait = send_progress_message($cid, $mid, $uid, "🎬", 10, 200000, false);
 
 // 2️⃣ Cobalt API orqali video olish
 $video_url = cobalt_download($tx_clean);
-error_log("TikTok URL: " . $tx_clean);
-error_log("Cobalt javob video_url: " . var_export($video_url, true));
 
 // ❌ Video topilmasa / API ishlamasa
 if (!$video_url) {
@@ -34,13 +32,13 @@ if (!$video_url) {
     exit();
 }
 
-// ✅ Progressni o'chirish
+// ✅ Progressni o‘chirish
 bot('deleteMessage', [
     'chat_id' => $cid,
     'message_id' => $wait
 ]);
 
-// 💬 "video yubormoqda..." typing-style effekt
+// 💬 “video yubormoqda...” typing-style effekt
 bot('sendChatAction', [
     'chat_id' => $cid,
     'action' => 'upload_video'
