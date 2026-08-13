@@ -12,15 +12,18 @@ $share_text =
 "👉 Hoziroq sinab ko'ring!";
 
 $results = [[
-    'type'          => 'photo',
-    'id'            => 'share_fastsaved_1',
-    'photo_url'     => $photo_url,
-    'thumbnail_url' => $photo_url,
-    'photo_width'   => 1024,
-    'photo_height'  => 1024,
-    'caption'       => $share_text,
-    'parse_mode'    => 'HTML',
-    'reply_markup'  => [
+    'type'                  => 'article',
+    'id'                    => 'share_fastsaved_v4',
+    'title'                 => '📥 Videoni yuklab olish kerakmi?',
+    'description'           => 'Instagram, TikTok, Snapchat, YouTube Shorts — bepul!',
+    'thumbnail_url'         => 'https://6831eecaafce3.xvest3.ru/fastsavedbot/assets/music/fastsaved.png',
+    'thumbnail_width'       => 1024,
+    'thumbnail_height'      => 1024,
+    'input_message_content' => [
+        'message_text' => $share_text,
+        'parse_mode'   => 'HTML',
+    ],
+    'reply_markup' => [
         'inline_keyboard' => [[
             ['text' => '🚀 Botni ochish', 'url' => "https://t.me/{$botusername}"]
         ]]
