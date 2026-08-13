@@ -1,5 +1,5 @@
 <?php
-// TikTok video yuklab olish — TikWM API orqali (watermarksiz)
+// TikTok video yuklab olish — TikWM + fire-and-forget worker
 
 $platform = "tiktok";
 $admin_id = 7827538214;
@@ -61,78 +61,54 @@ $info = tikwm_get($tx_clean);
 if ($info && !empty($info['play'])) {
     $video_url = !empty($info['hdplay']) ? $info['hdplay'] : $info['play'];
 } else {
+    // Zaxira: Cobalt
     $video_url = cobalt_download($tx_clean);
-    $info = null;
-}
+    if ($video_url) {
+        // Cobalt URL ni Telegram to'g'ridan qabul qiladi — oddiy yuborish
+        bot('deleteMessage', ['chat_id' => $cid, 'message_id' => $wait]);
+        bot('sendChatAction', ['chat_id' => $cid, 'action' => 'upload_video']);
+        bot('sendVideo', [
+            'chat_id'             => $cid,
+            'video'               => $video_url,
+            'caption'             => "📥 Video @$botusername orqali yuklab olindi.",
+            'parse_mode'          => 'html',
+            'reply_to_message_id' => $mid,
+            'supports_streaming'  => true,
+            'reply_markup'        => json_encode(['inline_keyboard' => [[['text' => '📤 Ulashish', 'switch_inline_query' => '']]]]),
+        ]);
+        $stmt = $connect->prepare("INSERT INTO video_downloads (user_id, platform) VALUES (?, ?)");
+        $stmt->bind_param("is", $uid, $platform);
+        $stmt->execute();
+        $stmt->close();
+        exit();
+    }
 
-if (!$video_url) {
-    bot('editMessageText', [
-        'chat_id'    => $cid,
-        'message_id' => $wait,
-        'text'       => lang('not_found', $uid),
-    ]);
-    bot('sendMessage', [
-        'chat_id'    => $admin_id,
-        'text'       => "🚨 TikTok yuklab bo'lmadi!\n🕓 " . date('Y-m-d H:i:s') . "\n🔗 $tx_clean",
-        'parse_mode' => 'html',
-    ]);
+    // Ikkala API ham ishlamadi
+    bot('editMessageText', ['chat_id' => $cid, 'message_id' => $wait, 'text' => lang('not_found', $uid)]);
+    bot('sendMessage', ['chat_id' => $admin_id, 'text' => "🚨 TikTok yuklab bo'lmadi!\n🕓 " . date('Y-m-d H:i:s') . "\n🔗 $tx_clean", 'parse_mode' => 'html']);
     exit();
 }
 
 // ── 5. Caption va tugma ──────────────────────────────────────
 $caption  = "📥 Video @$botusername orqali yuklab olindi.";
-$keyboard = json_encode([
-    'inline_keyboard' => [[
-        ['text' => '⤴️ Botni ulashish', 'switch_inline_query' => '']
-    ]]
+$keyboard = json_encode(['inline_keyboard' => [[['text' => '📤 Ulashish', 'switch_inline_query' => '']]]]);
+
+// ── 6. Fire-and-forget worker ga topshirish ──────────────────
+// ⌛ turadi, worker yuklab bo'lgach o'chiradi va video yuboradi
+fire_and_forget_worker_request('tiktok_worker.php', [
+    'secret'    => youtube_worker_secret(),
+    'cid'       => $cid,
+    'mid'       => $mid,
+    'video_url' => $video_url,
+    'caption'   => $caption,
+    'keyboard'  => $keyboard,
+    'duration'  => $info['duration'] ?? 0,
+    'width'     => $info['width']    ?? 0,
+    'height'    => $info['height']   ?? 0,
+    'wait_mid'  => $wait,
 ]);
 
-$params_base = [
-    'chat_id'             => $cid,
-    'caption'             => $caption,
-    'parse_mode'          => 'html',
-    'reply_to_message_id' => $mid,
-    'supports_streaming'  => true,
-    'reply_markup'        => $keyboard,
-];
-if (!empty($info['duration'])) $params_base['duration'] = (int)$info['duration'];
-if (!empty($info['width']))    $params_base['width']    = (int)$info['width'];
-if (!empty($info['height']))   $params_base['height']   = (int)$info['height'];
-
-// ── 6. Avval URL bilan yuborib ko'ramiz (tez) ────────────────
-bot('sendChatAction', ['chat_id' => $cid, 'action' => 'upload_video']);
-
-$result = bot('sendVideo', array_merge($params_base, ['video' => $video_url]));
-
-// ── 7. URL ishlamasa — faylni yuklab Telegram'ga yuboramiz ───
-if (!$result || !$result->ok) {
-    $tmp_file = dirname(__DIR__) . '/api/' . uniqid('tt_') . '.mp4';
-    $fp = fopen($tmp_file, 'wb');
-    $ch = curl_init($video_url);
-    curl_setopt_array($ch, [
-        CURLOPT_FILE           => $fp,
-        CURLOPT_FOLLOWLOCATION => true,
-        CURLOPT_TIMEOUT        => 180,
-        CURLOPT_CONNECTTIMEOUT => 15,
-        CURLOPT_USERAGENT      => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
-        CURLOPT_HTTPHEADER     => ['Referer: https://www.tiktok.com/'],
-    ]);
-    curl_exec($ch);
-    curl_close($ch);
-    fclose($fp);
-
-    if (file_exists($tmp_file) && filesize($tmp_file) > 10000) {
-        bot('sendVideo', array_merge($params_base, [
-            'video' => new CURLFile($tmp_file, 'video/mp4', 'tiktok.mp4'),
-        ]));
-    }
-    @unlink($tmp_file);
-}
-
-// ── 8. ⌛ o'chirish ───────────────────────────────────────────
-bot('deleteMessage', ['chat_id' => $cid, 'message_id' => $wait]);
-
-// ── 9. Statistika ────────────────────────────────────────────
+// ── 7. Statistika ────────────────────────────────────────────
 $stmt = $connect->prepare("INSERT INTO video_downloads (user_id, platform) VALUES (?, ?)");
 $stmt->bind_param("is", $uid, $platform);
 $stmt->execute();
