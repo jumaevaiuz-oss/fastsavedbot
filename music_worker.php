@@ -1,139 +1,56 @@
 <?php
-// Musiqa yuklab olish worker'i — bot.php webhook so'roviga tezkor javob
-// qaytarish uchun uzoq davom etadigan Cobalt konvertatsiyasi + yuklab olish +
-// Telegram'ga yuklash ishi shu alohida so'rovga ajratilgan (bot.php buni
-// "fire-and-forget" tarzda, javobni kutmasdan chaqiradi). bot.php o'zi qisqa
-// timeout bilan ulanishni uzsa ham, ignore_user_abort(true) tufayli bu
-// skript oxirigacha davom etadi.
-ignore_user_abort(true);
-@set_time_limit(150);
+/**
+ * music_worker.php — shared hostingda joylashadi
+ * handlers/music.php tomonidan chaqiriladi
+ * Railway'dagi /download endpointiga so'rov yuboradi
+ *
+ * SOZLASH:
+ *   RAILWAY_URL  → Railway proyektingiz URL (masalan: https://ytdlp-search-production.up.railway.app)
+ *   API_SECRET   → Railway Variables'dagi API_SECRET bilan bir xil bo'lishi SHART
+ */
 
-require_once __DIR__ . '/config.php';
-require_once __DIR__ . '/src/functions.php';
-require_once __DIR__ . '/lang/user_lang.php';
-require_once __DIR__ . '/lang/translations.php';
+define('RAILWAY_URL', 'https://ytdlp-search-production.up.railway.app'); // ← o'zgartiring
+define('API_SECRET',  'o'zgartiring_yaxshi_parol_qo\'ying');              // ← Railway'dagi API_SECRET bilan bir xil
 
-// 🔒 Faqat bot.php'ning o'zi (bot tokenidan hosila qilingan maxfiy tokenni
-// bilgan holda) shu faylni chaqira oladi.
-$secret = $_POST['secret'] ?? '';
-if (!hash_equals(youtube_worker_secret(), $secret)) {
+// ── Xavfsizlik: faqat ichki chaqiruvlarga ruxsat ────────────
+$incoming_secret = $_POST['secret'] ?? '';
+if ($incoming_secret !== API_SECRET) {
     http_response_code(403);
-    exit;
+    exit('Forbidden');
 }
 
-$chat_id     = $_POST['chat_id'] ?? null;
-$uid         = $_POST['uid'] ?? null;
-$title       = $_POST['title'] ?? null;
-$artist      = $_POST['artist'] ?? null;
-$youtube_url = $_POST['youtube_url'] ?? null;
+// ── Parametrlarni olish ──────────────────────────────────────
+$chat_id     = $_POST['chat_id']     ?? '';
+$uid         = $_POST['uid']         ?? '';
+$title       = $_POST['title']       ?? 'Musiqa';
+$artist      = $_POST['artist']      ?? '';
+$youtube_url = $_POST['youtube_url'] ?? '';
 
 if (!$chat_id || !$youtube_url) {
     http_response_code(400);
-    exit;
+    exit('Bad Request');
 }
 
-// 🔍 PHP fatal xatosi (masalan xotira yetishmasligi yoki kutilmagan tur
-// xatosi) yuz bersa ham, buni jim o'tkazib yubormasdan adminga xabar beramiz.
-register_shutdown_function(function () {
-    $error = error_get_last();
-    if ($error && in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR])) {
-        bot('sendMessage', [
-            'chat_id' => 7827538214,
-            'text' => "🚨 music_worker FATAL xato: {$error['message']} ({$error['file']}:{$error['line']})",
-        ]);
-    }
-});
-
-$botusername = bot('getme')->result->username ?? '';
-
-// 🎧 Yangi qidiruv API'si to'g'ridan-to'g'ri audio havolasi bermaydi, faqat
-// YouTube havolasini beradi — shu sabab Cobalt API orqali audio (MP3,
-// 320kbps) havolasini olamiz.
-$music = cobalt_youtube($youtube_url, [
-    'downloadMode' => 'audio',
-    'audioFormat' => 'mp3',
-    'audioBitrate' => '320'
+// ── Railway'ga so'rov yuborish ───────────────────────────────
+$ch = curl_init(RAILWAY_URL . '/download');
+curl_setopt_array($ch, [
+    CURLOPT_POST           => true,
+    CURLOPT_POSTFIELDS     => http_build_query([
+        'secret'      => API_SECRET,
+        'chat_id'     => $chat_id,
+        'youtube_url' => $youtube_url,
+        'title'       => $title,
+        'artist'      => $artist,
+    ]),
+    CURLOPT_RETURNTRANSFER => true,
+    CURLOPT_TIMEOUT        => 200,        // Railway yuklab olish vaqtini kutadi
+    CURLOPT_CONNECTTIMEOUT => 10,
+    CURLOPT_HTTPHEADER     => ['Content-Type: application/x-www-form-urlencoded'],
 ]);
 
-if (!$music) {
-    bot('sendMessage', [
-        'chat_id' => $chat_id,
-        'text' => lang('music_not_found', $uid)
-    ]);
-    exit;
-}
+$response = curl_exec($ch);
+$http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+curl_close($ch);
 
-// 🔹 Top songs bazasini yangilash
-$stmt = $connect->prepare("SELECT id FROM top_songs WHERE music_url = ? LIMIT 1");
-$stmt->bind_param("s", $music);
-$stmt->execute();
-$check = $stmt->get_result();
-$stmt->close();
-
-if ($check->num_rows == 0) {
-    $stmt = $connect->prepare("INSERT INTO top_songs (title, artist, music_url, downloads) VALUES (?, ?, ?, 1)");
-    $stmt->bind_param("sss", $title, $artist, $music);
-    $stmt->execute();
-    $stmt->close();
-} else {
-    $stmt = $connect->prepare("UPDATE top_songs SET downloads = downloads + 1 WHERE music_url = ?");
-    $stmt->bind_param("s", $music);
-    $stmt->execute();
-    $stmt->close();
-}
-
-// 🎧 Musiqani yuborish — Telegram ba'zan Cobalt tunnel havolasini
-// to'g'ridan-to'g'ri o'zi ololmaydi ("Bad Request: failed to get HTTP URL
-// content"), shu sabab avval o'zimiz yuklab olib, fayl sifatida yuboramiz.
-// sys_get_temp_dir() (odatda /tmp) ko'p shared hostinglarda open_basedir
-// tomonidan saytning o'z papkasidan tashqarida qoldirilgan bo'ladi — shu
-// sabab tempnam() shu yerda "false" qaytarib, keyingi fopen() ValueError
-// bilan yiqilib tushardi. O'rniga saytning o'zidagi (allaqachon yozish
-// huquqi tasdiqlangan) step/ papkasidan foydalanamiz.
-$tmp_music = tempnam(__DIR__ . '/step', 'music_');
-
-// 🔁 Tunnel havolasi ba'zan bir martalik "hiqichoq" beradi (HTTP 200 lekin
-// 0 bayt) — shu sabab bitta muvaffaqiyatsiz urinishdan keyin darhol taslim
-// bo'lmasdan, qisqa pauzadan so'ng yana bir marta urinib ko'ramiz.
-for ($attempt = 1; $attempt <= 2; $attempt++) {
-    $fh = fopen($tmp_music, 'w');
-    $ch_dl = curl_init($music);
-    curl_setopt_array($ch_dl, [
-        CURLOPT_FILE => $fh,
-        CURLOPT_TIMEOUT => 60,
-        CURLOPT_CONNECTTIMEOUT => 15,
-        CURLOPT_FOLLOWLOCATION => true,
-        // Ba'zi CDN'lar (masalan Google Video) User-Agent yo'q so'rovlarga
-        // HTTP 200 lekin bo'sh (0 bayt) javob qaytaradi — shu sabab oddiy
-        // brauzer User-Agent yuboramiz.
-        CURLOPT_USERAGENT => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-    ]);
-    curl_exec($ch_dl);
-    $dl_http_code = curl_getinfo($ch_dl, CURLINFO_HTTP_CODE);
-    curl_close($ch_dl);
-    fclose($fh);
-
-    if ($dl_http_code == 200 && filesize($tmp_music) >= 1000) {
-        break;
-    }
-    if ($attempt < 2) {
-        sleep(2);
-    }
-}
-
-if ($dl_http_code != 200 || filesize($tmp_music) < 1000) {
-    @unlink($tmp_music);
-    bot('sendMessage', [
-        'chat_id' => $chat_id,
-        'text' => lang('technical', $uid)
-    ]);
-    exit;
-}
-
-bot('sendAudio', [
-    'chat_id' => $chat_id,
-    'audio' => new CURLFile($tmp_music, 'audio/mpeg', 'audio.mp3'),
-    'caption' => "<b>🎵 $artist – $title</b>\n\n<b>Via @$botusername</b>",
-    'parse_mode' => 'HTML'
-]);
-@unlink($tmp_music);
+http_response_code($http_code ?: 500);
+echo $response;
