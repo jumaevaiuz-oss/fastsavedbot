@@ -1,6 +1,6 @@
 <?php
 // ============================================================
-// handlers/music.php
+// handlers/music.php  —  v2 (callback_data 64-bayt limit hal)
 // Musiqa izlash: 100 ta natija, sahifada 10 ta, sahifalash
 // bot.php tomonidan require qilinadi
 // ============================================================
@@ -10,8 +10,6 @@ if (
     (isset($tx) && (str_starts_with($tx, '/music') || str_starts_with($tx, '/m ')))
     || (isset($step) && $step === 'music_search')
 ) {
-
-    // Qidirish so'zini aniqlash
     $search_query = null;
 
     if (isset($tx) && (str_starts_with($tx, '/music') || str_starts_with($tx, '/m '))) {
@@ -32,51 +30,50 @@ if (
     exit;
 }
 
-// ── Sahifalash tugmasi: music_page_{page}_{query_b64} ───────
-if (isset($callbackdata) && str_starts_with($callbackdata, 'music_page_')) {
+// ── Sahifalash: mp_{page}_{qid} ─────────────────────────────
+// qid = qidiruvni keshda topish uchun md5 kaliti (8 belgi)
+if (isset($callbackdata) && str_starts_with($callbackdata, 'mp_')) {
     bot('answerCallbackQuery', ['callback_query_id' => $qid]);
 
-    $parts     = explode('_', $callbackdata, 4); // music_page_{page}_{b64}
-    $page      = (int)($parts[2] ?? 1);
-    $query_b64 = $parts[3] ?? '';
-    $query     = base64_decode($query_b64);
+    // mp_{page}_{qhash}
+    [, $page, $qhash] = explode('_', $callbackdata, 3) + [null, 1, ''];
+    $page = (int)$page;
 
+    global $connect;
+    $query = music_qhash_get($connect, $qhash);
     if (!$query) {
-        accl($qid, 'Xato: so\'rov topilmadi', 1);
+        bot('editMessageText', [
+            'chat_id'    => $callcid,
+            'message_id' => $callmid,
+            'text'       => '❌ Kesh eskirdi. Iltimos qayta qidiring: /music',
+            'parse_mode' => 'HTML',
+        ]);
         exit;
     }
-
-    // Xabani yangilash
-    bot('editMessageText', [
-        'chat_id'    => $callcid,
-        'message_id' => $callmid,
-        'text'       => "🔍 <b>" . htmlspecialchars($query) . "</b> qidirilmoqda...",
-        'parse_mode' => 'HTML',
-    ]);
 
     music_search_and_show($callcid, $callfrid, $query, $page, $callmid);
     exit;
 }
 
-// ── Yuklab olish tugmasi: music_dl_{video_id}_{title_b64} ───
-if (isset($callbackdata) && str_starts_with($callbackdata, 'music_dl_')) {
+// ── Yuklab olish: md_{vhash} ─────────────────────────────────
+// vhash = music_videos keshidagi qatorni topish uchun 8 belgi hash
+if (isset($callbackdata) && str_starts_with($callbackdata, 'md_')) {
     bot('answerCallbackQuery', ['callback_query_id' => $qid]);
 
-    // Format: music_dl_{video_id}_{artist_b64}_{title_b64}
-    $raw      = substr($callbackdata, strlen('music_dl_'));
-    $segments = explode('_', $raw, 3);
-    $video_id = $segments[0] ?? '';
-    $artist   = base64_decode($segments[1] ?? '') ?: 'Noma\'lum';
-    $title    = base64_decode($segments[2] ?? '') ?: 'Musiqa';
+    $vhash = substr($callbackdata, 3);
 
-    if (empty($video_id)) {
-        accl($qid, 'Video ID topilmadi', 1);
+    global $connect;
+    $video = music_vhash_get($connect, $vhash);
+
+    if (!$video) {
+        accl($qid, 'Kesh eskirdi, qayta qidiring.', 1);
         exit;
     }
 
-    $youtube_url = "https://www.youtube.com/watch?v={$video_id}";
+    $youtube_url = "https://www.youtube.com/watch?v={$video['video_id']}";
+    $title       = $video['title'];
+    $artist      = $video['artist'];
 
-    // Kutish xabari
     bot('editMessageText', [
         'chat_id'    => $callcid,
         'message_id' => $callmid,
@@ -84,7 +81,7 @@ if (isset($callbackdata) && str_starts_with($callbackdata, 'music_dl_')) {
         'parse_mode' => 'HTML',
     ]);
 
-    // music_worker.php ga fire-and-forget so'rov
+    // music_worker.php ga fire-and-forget
     $secret = youtube_worker_secret();
     $params = http_build_query([
         'secret'      => $secret,
@@ -95,141 +92,123 @@ if (isset($callbackdata) && str_starts_with($callbackdata, 'music_dl_')) {
         'youtube_url' => $youtube_url,
     ]);
 
-    $worker_url = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http')
-        . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost')
-        . rtrim(dirname($_SERVER['SCRIPT_NAME'] ?? ''), '/\\')
-        . '/music_worker.php';
+    $base = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http')
+          . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost')
+          . rtrim(dirname($_SERVER['SCRIPT_NAME'] ?? ''), '/\\');
 
-    $ch = curl_init($worker_url);
+    $ch = curl_init($base . '/music_worker.php');
     curl_setopt_array($ch, [
         CURLOPT_POST           => true,
         CURLOPT_POSTFIELDS     => $params,
         CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_TIMEOUT        => 5,   // fire-and-forget: javobni kutmaymiz
+        CURLOPT_TIMEOUT        => 5,
         CURLOPT_CONNECTTIMEOUT => 5,
     ]);
     curl_exec($ch);
     curl_close($ch);
 
-    // Eski qidirish xabarini o'chirish
     bot('deleteMessage', ['chat_id' => $callcid, 'message_id' => $callmid]);
     exit;
 }
 
 // ════════════════════════════════════════════════════════════
-// YORDAMCHI FUNKSIYALAR
+// ASOSIY FUNKSIYA
 // ════════════════════════════════════════════════════════════
 
-/**
- * YouTube'dan qidiradi va natijalarni sahifalab ko'rsatadi.
- *
- * @param int|string $chat_id
- * @param int|string $uid
- * @param string     $query
- * @param int        $page       1 dan boshlangan sahifa raqami
- * @param int|null   $edit_mid   Mavjud xabar ID (yangilash uchun), null = yangi xabar
- */
 function music_search_and_show($chat_id, $uid, string $query, int $page = 1, ?int $edit_mid = null): void
 {
-    $per_page   = 10;
-    $total      = 100;
-    $total_pages = (int)ceil($total / $per_page);
-    $page       = max(1, min($page, $total_pages));
-    $offset     = ($page - 1) * $per_page;
+    $per_page = 10;
 
-    // Kesh kaliti (DB yoki fayl asosida)
-    $cache_key = 'music_search_' . md5($query);
-
-    // ── 1. Keshdan o'qish ─────────────────────────────────
     global $connect;
+    music_ensure_tables($connect);
+
+    $cache_key = 'ms_' . md5(mb_strtolower(trim($query)));
+
+    // 1. Keshdan o'qish
     $all_results = music_cache_get($connect, $cache_key);
 
-    // ── 2. Agar kesh yo'q — YouTube'dan qidirish ─────────
+    // 2. Kesh yo'q — YouTube'dan qidirish
     if ($all_results === null) {
-        // Qidirish xabari
-        $msg_id = null;
         if ($edit_mid) {
             bot('editMessageText', [
                 'chat_id'    => $chat_id,
                 'message_id' => $edit_mid,
-                'text'       => "🔍 <b>" . htmlspecialchars($query) . "</b> bo'yicha 100 ta natija qidirilmoqda...",
+                'text'       => "🔍 <b>" . htmlspecialchars($query) . "</b> qidirilmoqda...",
                 'parse_mode' => 'HTML',
             ]);
+            $msg_id = null;
         } else {
             $msg_id = sms($chat_id, "🔍 <b>" . htmlspecialchars($query) . "</b> qidirilmoqda...", null)->result->message_id ?? null;
         }
 
-        $all_results = music_youtube_search($query, $total);
+        $all_results = music_youtube_search($query, 100);
 
         if (empty($all_results)) {
-            $text = "❌ <b>" . htmlspecialchars($query) . "</b> bo'yicha hech narsa topilmadi.\n\nBoshqa so'z bilan urinib ko'ring.";
+            $err = "❌ <b>" . htmlspecialchars($query) . "</b> bo'yicha hech narsa topilmadi.\n\nBoshqa so'z bilan urinib ko'ring.";
             if ($edit_mid) {
-                bot('editMessageText', ['chat_id' => $chat_id, 'message_id' => $edit_mid, 'text' => $text, 'parse_mode' => 'HTML']);
+                bot('editMessageText', ['chat_id' => $chat_id, 'message_id' => $edit_mid, 'text' => $err, 'parse_mode' => 'HTML']);
             } else {
                 if ($msg_id) bot('deleteMessage', ['chat_id' => $chat_id, 'message_id' => $msg_id]);
-                sms($chat_id, $text, null);
+                sms($chat_id, $err, null);
             }
             return;
         }
 
-        // Keshga saqlash (30 daqiqa)
         music_cache_set($connect, $cache_key, $all_results, 1800);
 
-        if ($msg_id) {
+        if (isset($msg_id) && $msg_id) {
             bot('deleteMessage', ['chat_id' => $chat_id, 'message_id' => $msg_id]);
         }
     }
 
-    // ── 3. Sahifa uchun natijalarni ajratish ─────────────
+    // 3. Sahifalash
     $found       = count($all_results);
-    $total_pages = (int)ceil($found / $per_page);
+    $total_pages = max(1, (int)ceil($found / $per_page));
     $page        = max(1, min($page, $total_pages));
     $offset      = ($page - 1) * $per_page;
     $page_items  = array_slice($all_results, $offset, $per_page);
 
-    if (empty($page_items)) {
-        return;
-    }
+    if (empty($page_items)) return;
 
-    // ── 4. Xabar matni va tugmalarni qurish ──────────────
-    $query_b64 = base64_encode($query);
-    $text      = "🎵 <b>" . htmlspecialchars($query) . "</b> — natijalar\n";
-    $text     .= "📄 Sahifa <b>{$page}</b> / <b>{$total_pages}</b> | Jami: <b>{$found}</b>\n\n";
+    // 4. Qidirish hash (sahifalash tugmasi uchun)
+    $qhash = substr(md5($query), 0, 8);
+    music_qhash_set($connect, $qhash, $query);
+
+    // 5. Xabar matni + tugmalar
+    $text  = "🎵 <b>" . htmlspecialchars($query) . "</b> natijalari\n";
+    $text .= "📄 Sahifa <b>{$page}/{$total_pages}</b>  |  Jami: <b>{$found}</b>\n\n";
 
     $buttons = [];
 
     foreach ($page_items as $i => $item) {
-        $num      = $offset + $i + 1;
-        $title    = htmlspecialchars($item['title']);
-        $artist   = htmlspecialchars($item['artist']);
-        $duration = $item['duration'];
+        $num    = $offset + $i + 1;
+        $ttl    = htmlspecialchars($item['title']);
+        $art    = htmlspecialchars($item['artist']);
+        $dur    = $item['duration'];
 
-        $text .= "{$num}. 🎧 <b>{$artist}</b> – {$title} <i>({$duration})</i>\n";
+        $text .= "{$num}. 🎧 <b>{$art}</b> – {$ttl} <i>({$dur})</i>\n";
 
-        // Tugma uchun callback_data (Telegram 64 bayt cheklovi bor)
-        $cb_artist = base64_encode(mb_substr($item['artist'], 0, 20));
-        $cb_title  = base64_encode(mb_substr($item['title'], 0, 20));
-        $cb        = "music_dl_{$item['id']}_{$cb_artist}_{$cb_title}";
+        // Video hash saqlash — callback 64 baytdan oshmasin
+        $vhash = substr(md5($item['id']), 0, 8);
+        music_vhash_set($connect, $vhash, $item);
 
-        $btn_label = "▶️ {$num}. " . mb_substr($artist ?: $title, 0, 30);
-        $buttons[] = [['text' => $btn_label, 'callback_data' => $cb]];
+        $label = "▶️ {$num}. " . mb_substr($art ?: $ttl, 0, 28);
+        $buttons[] = [['text' => $label, 'callback_data' => "md_{$vhash}"]]; // ≤ 12 bayt
     }
 
-    // ── 5. Navigatsiya tugmalari ──────────────────────────
+    // 6. Navigatsiya
     $nav = [];
     if ($page > 1) {
-        $nav[] = ['text' => '⬅️ Oldingi', 'callback_data' => "music_page_" . ($page - 1) . "_$query_b64"];
+        $nav[] = ['text' => '⬅️ Oldingi', 'callback_data' => "mp_" . ($page - 1) . "_{$qhash}"];
     }
     if ($page < $total_pages) {
-        $nav[] = ['text' => 'Keyingi ➡️', 'callback_data' => "music_page_" . ($page + 1) . "_$query_b64"];
+        $nav[] = ['text' => 'Keyingi ➡️', 'callback_data' => "mp_" . ($page + 1) . "_{$qhash}"];
     }
-    if (!empty($nav)) {
-        $buttons[] = $nav;
-    }
+    if (!empty($nav)) $buttons[] = $nav;
 
     $kb = json_encode(['inline_keyboard' => $buttons]);
 
-    // ── 6. Yuborish yoki yangilash ────────────────────────
+    // 7. Yuborish yoki yangilash
     if ($edit_mid) {
         bot('editMessageText', [
             'chat_id'      => $chat_id,
@@ -243,133 +222,68 @@ function music_search_and_show($chat_id, $uid, string $query, int $page = 1, ?in
     }
 }
 
-/**
- * YouTube Music Search API (scraping yo'q, rasmiy iframe_api + no-key endpoint)
- * Ishonchli, bepul, API key talab qilmaydi.
- */
+// ════════════════════════════════════════════════════════════
+// YOUTUBE QIDIRISH
+// ════════════════════════════════════════════════════════════
+
 function music_youtube_search(string $query, int $limit = 100): array
 {
-    $results  = [];
-    $fetched  = 0;
-    $page_token = null;
+    // Asosiy: InnerTube API (key talab qilmaydi, barqaror)
+    $results = music_innertube_search($query, $limit);
 
-    // YouTube Data API v3 yo'q — biz InnerTube (YouTube'ning ichki API'si) ishlatamiz
-    // Bu rasmiy emas, lekin barqaror va keng qo'llaniladi (yt-dlp ham shu usuldan foydalanadi)
-    $api_key = 'AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8'; // YouTube'ning ommaviy embedded key
-
-    do {
-        $params = [
-            'part'       => 'snippet',
-            'q'          => $query,
-            'type'       => 'video',
-            'videoCategoryId' => '10', // Music kategoriyasi
-            'maxResults' => min(50, $limit - $fetched),
-            'key'        => $api_key,
-        ];
-        if ($page_token) {
-            $params['pageToken'] = $page_token;
-        }
-
-        $url = 'https://www.googleapis.com/youtube/v3/search?' . http_build_query($params);
-
-        $ch = curl_init($url);
-        curl_setopt_array($ch, [
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_TIMEOUT        => 15,
-            CURLOPT_USERAGENT      => 'Mozilla/5.0',
-        ]);
-        $response = curl_exec($ch);
-        curl_close($ch);
-
-        $data = json_decode($response, true);
-
-        if (empty($data['items'])) {
-            // YouTube Data API ishlamasa, backup: scraping usuli
-            if (empty($results)) {
-                $results = music_youtube_scrape($query, $limit);
-            }
-            break;
-        }
-
-        foreach ($data['items'] as $item) {
-            if ($fetched >= $limit) break;
-            $vid_id  = $item['id']['videoId'] ?? '';
-            $snippet = $item['snippet'] ?? [];
-            if (!$vid_id) continue;
-
-            $results[] = [
-                'id'       => $vid_id,
-                'title'    => $snippet['title'] ?? 'Noma\'lum',
-                'artist'   => $snippet['channelTitle'] ?? '',
-                'duration' => '?', // snippet'da davomiylik yo'q, qo'shimcha so'rov kerak
-            ];
-            $fetched++;
-        }
-
-        $page_token = $data['nextPageToken'] ?? null;
-
-    } while ($page_token && $fetched < $limit);
-
-    // Agar natijalar bo'sh bo'lsa — backup usul
+    // Backup: agar 0 natija
     if (empty($results)) {
-        $results = music_youtube_scrape($query, $limit);
+        $results = music_yt_data_api($query, $limit);
     }
 
-    return $results;
+    return array_slice($results, 0, $limit);
 }
 
 /**
- * YouTube'dan innertube API orqali qidirish (backup, API key talab qilmaydi)
+ * YouTube InnerTube (ichki API) — bepul, barqaror
  */
-function music_youtube_scrape(string $query, int $limit = 100): array
+function music_innertube_search(string $query, int $limit = 100): array
 {
     $results    = [];
     $cont_token = null;
 
-    $headers = [
-        'Content-Type: application/json',
-        'X-YouTube-Client-Name: 1',
-        'X-YouTube-Client-Version: 2.20240101',
-        'Origin: https://www.youtube.com',
-        'Referer: https://www.youtube.com/',
+    $yt_key = 'AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8';
+
+    $client_ctx = [
+        'clientName'    => 'WEB',
+        'clientVersion' => '2.20240101.07.00',
+        'hl'            => 'uz',
+        'gl'            => 'UZ',
     ];
 
-    for ($attempt = 0; $attempt < 4 && count($results) < $limit; $attempt++) {
-        if ($attempt === 0) {
-            // Birinchi qidiruv
+    for ($round = 0; $round < 5 && count($results) < $limit; $round++) {
+        if ($round === 0) {
+            $url  = "https://www.youtube.com/youtubei/v1/search?key={$yt_key}";
             $body = json_encode([
-                'context' => [
-                    'client' => [
-                        'clientName'    => 'WEB',
-                        'clientVersion' => '2.20240101',
-                        'hl'            => 'uz',
-                    ],
-                ],
-                'query'  => $query,
-                'params' => 'EgIQAQ==', // Music filtri
+                'context' => ['client' => $client_ctx],
+                'query'   => $query,
+                'params'  => 'EgIQAQ==', // Faqat video, music filtri
             ]);
-            $url = 'https://www.youtube.com/youtubei/v1/search?key=AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8';
         } else {
-            // Keyingi sahifa
             if (!$cont_token) break;
+            $url  = "https://www.youtube.com/youtubei/v1/search?key={$yt_key}";
             $body = json_encode([
-                'context' => [
-                    'client' => [
-                        'clientName'    => 'WEB',
-                        'clientVersion' => '2.20240101',
-                        'hl'            => 'uz',
-                    ],
-                ],
+                'context'      => ['client' => $client_ctx],
                 'continuation' => $cont_token,
             ]);
-            $url = 'https://www.youtube.com/youtubei/v1/next?key=AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8';
         }
 
         $ch = curl_init($url);
         curl_setopt_array($ch, [
             CURLOPT_POST           => true,
             CURLOPT_POSTFIELDS     => $body,
-            CURLOPT_HTTPHEADER     => $headers,
+            CURLOPT_HTTPHEADER     => [
+                'Content-Type: application/json',
+                'X-YouTube-Client-Name: 1',
+                'X-YouTube-Client-Version: 2.20240101.07.00',
+                'Origin: https://www.youtube.com',
+                'Referer: https://www.youtube.com/results?search_query=' . urlencode($query),
+            ],
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_TIMEOUT        => 20,
             CURLOPT_USERAGENT      => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
@@ -377,126 +291,203 @@ function music_youtube_scrape(string $query, int $limit = 100): array
         $raw = curl_exec($ch);
         curl_close($ch);
 
+        if (!$raw) break;
         $data = json_decode($raw, true);
-        if (!$data) break;
+        if (!is_array($data)) break;
 
-        // Video ma'lumotlarini ajratib olish
-        $items = music_extract_innertube_items($data);
-        foreach ($items as $item) {
-            if (count($results) >= $limit) break;
-            $results[] = $item;
-        }
+        // Video'larni ajratib olish
+        music_traverse($data, $results, $limit);
 
-        // Keyingi sahifa tokeni
+        // Keyingi sahifa
         $cont_token = music_find_continuation($data);
-        if (!$cont_token) break;
     }
 
-    return array_slice($results, 0, $limit);
+    return $results;
 }
 
 /**
- * InnerTube JSON'dan video ma'lumotlarini rekursiv ajratib oladi
+ * YouTube Data API v3 — backup (limit: 100 ta/kun bepul)
  */
-function music_extract_innertube_items(array $data): array
+function music_yt_data_api(string $query, int $limit = 100): array
 {
-    $items = [];
+    $results    = [];
+    $api_key    = 'AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8';
+    $page_token = null;
+    $fetched    = 0;
 
-    // videoRenderer qidirish
-    $json_str = json_encode($data);
-    $decoded  = json_decode($json_str, true);
+    do {
+        $params = [
+            'part'            => 'snippet',
+            'q'               => $query,
+            'type'            => 'video',
+            'videoCategoryId' => '10',
+            'maxResults'      => min(50, $limit - $fetched),
+            'key'             => $api_key,
+        ];
+        if ($page_token) $params['pageToken'] = $page_token;
 
-    // videoRenderer'larni topish uchun rekursiv traversal
-    music_traverse($decoded, $items);
+        $ch = curl_init('https://www.googleapis.com/youtube/v3/search?' . http_build_query($params));
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT        => 15,
+            CURLOPT_USERAGENT      => 'Mozilla/5.0',
+        ]);
+        $raw = curl_exec($ch);
+        curl_close($ch);
 
-    return $items;
+        $data = json_decode($raw, true);
+        if (empty($data['items'])) break;
+
+        foreach ($data['items'] as $item) {
+            if ($fetched >= $limit) break;
+            $vid = $item['id']['videoId'] ?? '';
+            if (!$vid) continue;
+            $sn = $item['snippet'] ?? [];
+            $results[] = [
+                'id'       => $vid,
+                'title'    => $sn['title'] ?? 'Noma\'lum',
+                'artist'   => $sn['channelTitle'] ?? '',
+                'duration' => '?',
+            ];
+            $fetched++;
+        }
+
+        $page_token = $data['nextPageToken'] ?? null;
+    } while ($page_token && $fetched < $limit);
+
+    return $results;
 }
 
-function music_traverse(mixed $node, array &$results): void
+// ════════════════════════════════════════════════════════════
+// INNERTUBE PARSER
+// ════════════════════════════════════════════════════════════
+
+function music_traverse(mixed $node, array &$results, int $limit = 100): void
 {
-    if (!is_array($node)) return;
+    if (!is_array($node) || count($results) >= $limit) return;
 
     if (isset($node['videoRenderer'])) {
-        $vr  = $node['videoRenderer'];
-        $id  = $vr['videoId'] ?? '';
-
+        $vr = $node['videoRenderer'];
+        $id = $vr['videoId'] ?? '';
         if ($id) {
-            // Davomiylik
-            $dur = '';
-            if (isset($vr['lengthText']['simpleText'])) {
-                $dur = $vr['lengthText']['simpleText'];
-            }
-
-            // Sarlavha
-            $title = '';
-            if (isset($vr['title']['runs'][0]['text'])) {
-                $title = $vr['title']['runs'][0]['text'];
-            }
-
-            // Artist/kanal
-            $artist = '';
-            if (isset($vr['ownerText']['runs'][0]['text'])) {
-                $artist = $vr['ownerText']['runs'][0]['text'];
-            }
-
             $results[] = [
                 'id'       => $id,
-                'title'    => $title ?: 'Noma\'lum',
-                'artist'   => $artist,
-                'duration' => $dur ?: '?',
+                'title'    => $vr['title']['runs'][0]['text']        ?? 'Noma\'lum',
+                'artist'   => $vr['ownerText']['runs'][0]['text']    ?? '',
+                'duration' => $vr['lengthText']['simpleText']        ?? '?',
             ];
         }
         return;
     }
 
-    foreach ($node as $value) {
-        music_traverse($value, $results);
+    foreach ($node as $v) {
+        if (count($results) >= $limit) break;
+        music_traverse($v, $results, $limit);
     }
 }
 
 function music_find_continuation(array $data): ?string
 {
+    // Eng tez usul — JSON string ichida qidirish
     $json = json_encode($data);
-    if (preg_match('/"continuationCommand"\s*:\s*\{[^}]*"token"\s*:\s*"([^"]+)"/', $json, $m)) {
+    if (preg_match('/"token"\s*:\s*"(4qmFsgI[^"]{20,})"/', $json, $m)) {
         return $m[1];
     }
     return null;
 }
 
-// ── Kesh funksiyalari (DB asosida) ──────────────────────────
+// ════════════════════════════════════════════════════════════
+// DB YORDAMCHI FUNKSIYALAR
+// ════════════════════════════════════════════════════════════
 
+function music_ensure_tables($connect): void
+{
+    static $done = false;
+    if ($done) return;
+    $done = true;
+
+    $connect->query("CREATE TABLE IF NOT EXISTS `music_cache` (
+        `cache_key`  varchar(64)  NOT NULL PRIMARY KEY,
+        `data`       mediumtext   NOT NULL,
+        `expires_at` int(11)      NOT NULL
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+    $connect->query("CREATE TABLE IF NOT EXISTS `music_qhash` (
+        `qhash`      varchar(8)   NOT NULL PRIMARY KEY,
+        `query`      varchar(255) NOT NULL,
+        `expires_at` int(11)      NOT NULL
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+    $connect->query("CREATE TABLE IF NOT EXISTS `music_vhash` (
+        `vhash`      varchar(8)   NOT NULL PRIMARY KEY,
+        `video_id`   varchar(20)  NOT NULL,
+        `title`      varchar(255) NOT NULL,
+        `artist`     varchar(255) NOT NULL,
+        `expires_at` int(11)      NOT NULL
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+}
+
+// -- Natijalar keshi --
 function music_cache_get($connect, string $key): ?array
 {
-    // Jadval mavjudligini tekshirish
-    $connect->query("CREATE TABLE IF NOT EXISTS `music_cache` (
-        `cache_key` varchar(64) PRIMARY KEY,
-        `data`      mediumtext,
-        `expires_at` int(11)
-    )");
-
-    $stmt = $connect->prepare("SELECT `data`, `expires_at` FROM `music_cache` WHERE `cache_key` = ? LIMIT 1");
-    if (!$stmt) return null;
-    $stmt->bind_param('s', $key);
-    $stmt->execute();
-    $row = $stmt->get_result()->fetch_assoc();
-    $stmt->close();
-
+    $k = $connect->real_escape_string($key);
+    $r = $connect->query("SELECT `data`,`expires_at` FROM `music_cache` WHERE `cache_key`='$k' LIMIT 1");
+    if (!$r) return null;
+    $row = $r->fetch_assoc();
     if (!$row) return null;
     if ($row['expires_at'] < time()) {
-        $connect->query("DELETE FROM `music_cache` WHERE `cache_key` = '" . $connect->real_escape_string($key) . "'");
+        $connect->query("DELETE FROM `music_cache` WHERE `cache_key`='$k'");
         return null;
     }
-
-    $decoded = json_decode($row['data'], true);
-    return is_array($decoded) ? $decoded : null;
+    $d = json_decode($row['data'], true);
+    return is_array($d) ? $d : null;
 }
 
 function music_cache_set($connect, string $key, array $data, int $ttl = 1800): void
 {
-    $json    = $connect->real_escape_string(json_encode($data, JSON_UNESCAPED_UNICODE));
-    $key_esc = $connect->real_escape_string($key);
-    $expires = time() + $ttl;
+    $k = $connect->real_escape_string($key);
+    $j = $connect->real_escape_string(json_encode($data, JSON_UNESCAPED_UNICODE));
+    $e = time() + $ttl;
+    $connect->query("REPLACE INTO `music_cache` (`cache_key`,`data`,`expires_at`) VALUES ('$k','$j',$e)");
+}
 
-    $connect->query("REPLACE INTO `music_cache` (`cache_key`, `data`, `expires_at`)
-                     VALUES ('$key_esc', '$json', $expires)");
+// -- Qidirish matni hashi --
+function music_qhash_get($connect, string $qhash): ?string
+{
+    $h = $connect->real_escape_string($qhash);
+    $r = $connect->query("SELECT `query`,`expires_at` FROM `music_qhash` WHERE `qhash`='$h' LIMIT 1");
+    if (!$r) return null;
+    $row = $r->fetch_assoc();
+    if (!$row || $row['expires_at'] < time()) return null;
+    return $row['query'];
+}
+
+function music_qhash_set($connect, string $qhash, string $query): void
+{
+    $h = $connect->real_escape_string($qhash);
+    $q = $connect->real_escape_string($query);
+    $e = time() + 7200; // 2 soat
+    $connect->query("REPLACE INTO `music_qhash` (`qhash`,`query`,`expires_at`) VALUES ('$h','$q',$e)");
+}
+
+// -- Video ma'lumotlari hashi --
+function music_vhash_get($connect, string $vhash): ?array
+{
+    $h = $connect->real_escape_string($vhash);
+    $r = $connect->query("SELECT * FROM `music_vhash` WHERE `vhash`='$h' LIMIT 1");
+    if (!$r) return null;
+    $row = $r->fetch_assoc();
+    if (!$row || $row['expires_at'] < time()) return null;
+    return $row;
+}
+
+function music_vhash_set($connect, string $vhash, array $item): void
+{
+    $h  = $connect->real_escape_string($vhash);
+    $vi = $connect->real_escape_string($item['id']);
+    $t  = $connect->real_escape_string(mb_substr($item['title'], 0, 250));
+    $a  = $connect->real_escape_string(mb_substr($item['artist'], 0, 250));
+    $e  = time() + 7200;
+    $connect->query("REPLACE INTO `music_vhash` (`vhash`,`video_id`,`title`,`artist`,`expires_at`)
+                     VALUES ('$h','$vi','$t','$a',$e)");
 }
