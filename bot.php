@@ -941,6 +941,11 @@ if (isset($_GET['update']) && $_GET['update'] == "send") {
 }
 
 
+// 📤 Inline share
+if ($id) {
+    require __DIR__ . '/handlers/inline_share.php';
+}
+
 // 𝗬𝘂𝗸𝗹𝗼𝘃𝗰𝗵𝗶 𝗳𝘂𝗻𝗸𝘀𝗶𝘆𝗮𝗹𝗮𝗿 ⬇️⬇️
 
 //𝗜𝗻𝘀𝘁𝗮𝗴𝗿𝗮𝗺
