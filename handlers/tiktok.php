@@ -106,7 +106,7 @@ $caption  = "📥 Video @$botusername orqali yuklab olindi.";
 $keyboard = json_encode([
     'inline_keyboard' => [[
         [
-            'text'                => '🔗 Botni ulashish',
+            'text'                => '⤴️ Botni ulashish',
             'switch_inline_query' => ''   // istalgan chatga inline orqali yuborish
         ]
     ]]
