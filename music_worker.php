@@ -10,7 +10,7 @@
  */
 
 define('RAILWAY_URL', 'https://ytdlp-search-production.up.railway.app'); // ← o'zgartiring
-define('API_SECRET',  'o'zgartiring_yaxshi_parol_qo\'ying');              // ← Railway'dagi API_SECRET bilan bir xil
+define('API_SECRET',  'UzApiSecretX03');              // ← Railway'dagi API_SECRET bilan bir xil
 
 // ── Xavfsizlik: faqat ichki chaqiruvlarga ruxsat ────────────
 $incoming_secret = $_POST['secret'] ?? '';
