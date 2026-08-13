@@ -10,7 +10,7 @@ if (!$id) return; // Inline query kelmaganda o'tkazib yuborish
 
 // Bot rasmi — bu URL ni o'zingizning rasmingiz bilan almashtirishingiz mumkin
 // Yoki Telegram file_id ishlatish (bir marta yuklab, file_id ni saqlash kerak)
-$photo_url = 'https://raw.githubusercontent.com/jumaevaiuz-oss/fastsavedbot/main/assets/music/fastsaved.png';
+$photo_url = 'https://github.com/jumaevaiuz-oss/fastsavedbot/blob/main/assets/music/fastsaved.png';
 
 $share_text =
 "📥 <b>Videoni yuklab olish kerakmi?</b>\n\n" .
