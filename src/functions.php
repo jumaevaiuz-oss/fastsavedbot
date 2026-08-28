@@ -331,13 +331,13 @@ function send_progress_message($cid, $mid, $uid, $emoji, $step_percent, $sleep_u
     return $wait;
 }
 
-// Cobalt API (https://cobalt-production-ea14.up.railway.app) orqali
+// Cobalt API (https://cobalt-production-06a4.up.railway.app) orqali
 // YouTube/Instagram/TikTok/Snapchat havolasini to'g'ridan-to'g'ri yuklab
 // olish manziliga aylantiradi. Xato bo'lsa null qaytaradi va tashxis uchun
 // xom javobni error_log'ga yozadi.
 function cobalt_download($video_url)
 {
-    $ch = curl_init('https://cobalt-production-ea14.up.railway.app');
+    $ch = curl_init('https://cobalt-production-06a4.up.railway.app');
     curl_setopt_array($ch, [
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_POST => true,
@@ -482,7 +482,7 @@ function cobalt_youtube($url, $options = [])
 {
     $body = array_merge(["url" => $url], $options);
 
-    $ch = curl_init('https://cobalt-production-ea14.up.railway.app');
+    $ch = curl_init('https://cobalt-production-06a4.up.railway.app');
     curl_setopt_array($ch, [
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_POST => true,
